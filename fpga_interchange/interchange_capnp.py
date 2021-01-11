@@ -38,18 +38,18 @@ output_logical_netlist - Implements conversion of classes from physicla
 Interchange - Class that handles loading capnp schemas.
 
 """
+from .device_resources import DeviceResources
+from .physical_netlist import PhysicalNetlist, PhysicalCellType, \
+    PhysicalNetType, PhysicalBelPin, PhysicalSitePin, PhysicalSitePip, \
+    PhysicalPip, PhysicalNet, Placement
+from .logical_netlist import check_logical_netlist, LogicalNetlist, Cell, \
+    CellInstance, Library, Direction
+import os.path
+import gzip
+import enum
 import capnp
 import capnp.lib.capnp
 capnp.remove_import_hook()
-import enum
-import gzip
-import os.path
-from .logical_netlist import check_logical_netlist, LogicalNetlist, Cell, \
-        CellInstance, Library, Direction
-from .physical_netlist import PhysicalNetlist, PhysicalCellType, \
-        PhysicalNetType, PhysicalBelPin, PhysicalSitePin, PhysicalSitePip, \
-        PhysicalPip, PhysicalNet, Placement
-from .device_resources import DeviceResources
 
 # Flag indicating use of Packed Cap'n Proto Serialization
 IS_PACKED = False
@@ -83,7 +83,7 @@ def read_capnp_file(capnp_schema,
 
     """
     if compression_format == CompressionFormat.GZIP:
-        f_comp = gzip.GzipFile(fileobj=f_in, mode='rb')
+        f_comp = gzip.open(filename=f_in, mode='rb')
         if is_packed:
             return capnp_schema.from_bytes_packed(
                 f_comp.read(),
