@@ -687,6 +687,8 @@ class DeviceResources():
 
         self.tile_name_to_tile = {}
         self.site_name_to_site = {}
+        self.tiles = []
+        tiles_by_row = [[]]
         for tile_idx, tile in enumerate(self.device_resource_capnp.tileList):
             tile_name = self.strs[tile.name]
             tile_name_index = self.string_index[tile_name]
@@ -703,6 +705,14 @@ class DeviceResources():
                 tile_type_index=tile_type_index,
                 tile_type=self.strs[tile_type.name],
                 site_names=site_names)
+
+            # Create a list of lists of tiles by row
+            if len(tiles_by_row) <= tile.row:
+                for i in range(tile.row - len(tiles_by_row)):
+                    tiles_by_row.append([])
+                tiles_by_row.append([tile])
+            else:
+                tiles_by_row[tile.row].append(tile)
 
             for site_idx, site in enumerate(tile.sites):
                 site_name = self.strs[site.name]
@@ -737,9 +747,25 @@ class DeviceResources():
                         alt_index=alt_index,
                         site_type_name=site_type_name)
 
+        # sort each row list by column and then attach to master tile list
+        for tile_row in tiles_by_row:
+            tile_row.sort(key=DeviceResources.__sort_tile_cols__)
+            self.tiles += tile_row
+
         self.tile_wire_index_to_node_index = None
         self.parameter_definitions = None
         self.parameters_for_cell = None
+
+    def __sort_tile_cols__(tile):
+        """
+        Helper function for sort.
+
+        NOT designed for use outside of being a key function for sort().
+        Helps sort() sort the tiles based on col number
+
+        NOTE: self is purposely not included as the first arguement.
+        """
+        return tile.col
 
     def build_node_index(self):
         """ Build node index for looking up wires to nodes. """
@@ -921,6 +947,7 @@ class DeviceResources():
             pin_name=pin_name,
             wire_name=wire_name)
 
+<<<<<<< HEAD
     def get_constraints(self):
         constraints = Constraints()
         constraints.read_constraints(self.device_resource_capnp.constraints)
@@ -1059,3 +1086,29 @@ class DeviceResources():
             key = (cell_type, parameter_name)
             property_map[parameter_name] = self.parameter_definitions[
                 key].default_value
+=======
+    def generate_XDLRC(self, fileName=''):
+        """
+        UNDER CONSTRUCTION
+        Generate an XDLRC file based on the DeviceResources Device.
+
+        fileName (String) - filename for xdlrc file (.xdlrc extension
+            will be appended). Default: self.device_resource_capnp.name
+        """
+
+        if fileName = '':
+            fileName = self.device_resource_capnp.name
+
+        fileName = fileName + '.xdlrc'
+
+        xdlrc = open(fileName, "w+")
+
+        num_rows = self.tiles[-1].row + 1
+        num_cols = self.tiles[-1].col + 1
+
+        f.write(f"(tiles {num_rows} {num_cols}\n")
+
+        for tile in self.tiles:
+            f.write(f"\t(tile {tile.row} {tile.col} {sts[tile.name]} "
+                    + f"{strings[tile.type]} {len(tile.sites)}\n")
+>>>>>>> Adjust GZIP cmd; generate_XDLRC skeleton function
