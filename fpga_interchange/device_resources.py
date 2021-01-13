@@ -51,7 +51,8 @@ class Tile(namedtuple('Tile', 'tile_index tile_name_index tile_type_index')):
 class Site(
         namedtuple(
             'Site',
-            'tile_index tile_name_index site_index tile_type_site_type_index site_type_index alt_index'
+            ('tile_index tile_name_index site_index tile_type_site_type_index'
+             ' site_type_index alt_index')
         )):
     pass
 
@@ -96,7 +97,7 @@ class BelPin():
             repr(self.is_site_pin))
 
     def site_wires(self):
-        """ Return site wires that this object is attached too. """
+        """ Return site wires that self is attached too. """
         if self.site_wire_index is not None:
             return [
                 SiteWire(self.site.tile_index, self.site.site_index,
@@ -106,11 +107,11 @@ class BelPin():
             return []
 
     def nodes(self):
-        """ Return site wires that this object is attached too. """
+        """ Return site wires that self is attached too. """
         return []
 
     def is_connected(self, other_object):
-        """ Return true if this object and other_object are directly connected. """
+        """ Return true if self and other_object are directly connected. """
         # BelPin's for the site pins have a direct relationship.
         if other_object.is_site_pin_for(self.site, self.bel_pin_index):
             return True
@@ -122,13 +123,13 @@ class BelPin():
             return False
 
     def is_site_pin_for(self, site, bel_pin_index):
-        """ Return true if this object is the site pin for the specified BEL pin. """
+        """ Return true if self is the site pin for the specified BEL pin. """
         # BEL pins are not site pins for other BEL pins.
         return False
 
     def can_connect_via_site_wire(self, other_site, other_site_wire_index,
                                   other_direction):
-        """ Return true if this object can connected to the specified site wire. """
+        """ Return true if self can connect to the specified site wire. """
         if not can_connect_via_site_wire(self.site, self.site_wire_index,
                                          other_site, other_site_wire_index):
             # Not connected at all
@@ -137,15 +138,15 @@ class BelPin():
         return can_be_connected(self.direction, other_direction)
 
     def is_bel_pin(self, site, bel_pin_index):
-        """ Returns true if this object is the specified BEL pin. """
+        """ Returns true if self is the specified BEL pin. """
         return self.site == site and self.bel_pin_index == bel_pin_index
 
     def is_node_connected(self, node):
-        """ Returns true if this object is connected to the specified node. """
+        """ Returns true if self is connected to the specified node. """
         return False
 
     def is_root(self):
-        """ Returns true if this object could be a net root. """
+        """ Returns true if self could be a net root. """
         return self.direction in [Direction.Output, Direction.Inout
                                   ] and not self.is_site_pin
 
@@ -186,42 +187,42 @@ class SitePin():
             repr(self.node), repr(self.direction))
 
     def site_wires(self):
-        """ Return site wires that this object is attached too. """
+        """ Return site wires that self is attached too. """
         return [
             SiteWire(self.site.tile_index, self.site.site_index,
                      self.site_wire_index)
         ]
 
     def nodes(self):
-        """ Return site wires that this object is attached too. """
+        """ Return site wires that self is attached too. """
         return [self.node]
 
     def is_connected(self, other_object):
-        """ Return true if this object and other_object are directly connected. """
+        """ Return true if self and other_object are directly connected. """
         if other_object.is_bel_pin(self.site, self.bel_pin_index):
             return True
         else:
             return other_object.is_node_connected(self.node)
 
     def is_site_pin_for(self, site, bel_pin_index):
-        """ Return true if this object is the site pin for the specified BEL pin. """
+        """ Return true if self is the site pin for the specified BEL pin. """
         return self.site == site and self.bel_pin_index == bel_pin_index
 
     def can_connect_via_site_wire(self, other_site_index,
                                   other_site_wire_index, other_direction):
-        """ Return true if this object can connected to the specified site wire. """
+        """ Return true if self can connected to the specified site wire. """
         return False
 
     def is_bel_pin(self, site, bel_pin_index):
-        """ Returns true if this object is the specified BEL pin. """
+        """ Returns true if self is the specified BEL pin. """
         return False
 
     def is_node_connected(self, node):
-        """ Returns true if this object is connected to the specified node. """
+        """ Returns true if self is connected to the specified node. """
         return self.node == node
 
     def is_root(self):
-        """ Returns true if this object could be a net root. """
+        """ Returns true if self could be a net root. """
         return False
 
 
@@ -243,7 +244,7 @@ class SitePip():
             repr(self.out_site_wire_index))
 
     def site_wires(self):
-        """ Return site wires that this object is attached too. """
+        """ Return site wires that self is attached too. """
         return [
             SiteWire(self.site.tile_index, self.site.site_index,
                      self.in_site_wire_index),
@@ -252,11 +253,11 @@ class SitePip():
         ]
 
     def nodes(self):
-        """ Return site wires that this object is attached too. """
+        """ Return site wires that self is attached too. """
         return []
 
     def is_connected(self, other_object):
-        """ Return true if this object and other_object are directly connected. """
+        """ Return true if self and other_object are directly connected. """
         if other_object.can_connect_via_site_wire(
                 self.site, self.in_site_wire_index, Direction.Input):
             return True
@@ -265,12 +266,12 @@ class SitePip():
                 self.site, self.out_site_wire_index, Direction.Output)
 
     def is_site_pin_for(self, site, bel_pin_index):
-        """ Return true if this object is the site pin for the specified BEL pin. """
+        """ Return true if self is the site pin for the specified BEL pin. """
         return False
 
     def can_connect_via_site_wire(self, other_site, other_site_wire_index,
                                   other_direction):
-        """ Return true if this object can connected to the specified site wire. """
+        """ Return true if self can connected to the specified site wire. """
         if can_connect_via_site_wire(self.site, self.in_site_wire_index,
                                      other_site, other_site_wire_index):
             return can_be_connected(Direction.Input, other_direction)
@@ -281,7 +282,7 @@ class SitePip():
             return False
 
     def is_bel_pin(self, site, bel_pin_index):
-        """ Returns true if this object is the specified BEL pin. """
+        """ Returns true if self is the specified BEL pin. """
         if not self.site == site:
             return False
         else:
@@ -289,11 +290,11 @@ class SitePip():
                                      self.out_bel_pin_index)
 
     def is_node_connected(self, node):
-        """ Returns true if this object is connected to the specified node. """
+        """ Returns true if self is connected to the specified node. """
         return False
 
     def is_root(self):
-        """ Returns true if this object could be a net root. """
+        """ Returns true if self could be a net root. """
         return False
 
 
@@ -310,39 +311,39 @@ class Pip():
             repr(self.node0), repr(self.node1), repr(self.directional))
 
     def site_wires(self):
-        """ Return site wires that this object is attached too. """
+        """ Return site wires that self is attached too. """
         return []
 
     def nodes(self):
-        """ Return site wires that this object is attached too. """
+        """ Return site wires that self is attached too. """
         return [self.node0, self.node1]
 
     def is_connected(self, other_object):
-        """ Return true if this object and other_object are directly connected. """
+        """ Return true if self and other_object are directly connected. """
         if other_object.is_node_connected(self.node0):
             return True
         else:
             return other_object.is_node_connected(self.node1)
 
     def is_site_pin_for(self, site, bel_pin_index):
-        """ Return true if this object is the site pin for the specified BEL pin. """
+        """ Return true if self is the site pin for the specified BEL pin. """
         return False
 
     def can_connect_via_site_wire(self, other_site_index,
                                   other_site_wire_index, other_direction):
-        """ Return true if this object can connected to the specified site wire. """
+        """ Return true if self can connected to the specified site wire. """
         return False
 
     def is_bel_pin(self, site, bel_pin_index):
-        """ Returns true if this object is the specified BEL pin. """
+        """ Returns true if self is the specified BEL pin. """
         return False
 
     def is_node_connected(self, node):
-        """ Returns true if this object is connected to the specified node. """
+        """ Returns true if self is connected to the specified node. """
         return node in [self.node0, self.node1]
 
     def is_root(self):
-        """ Returns true if this object could be a net root. """
+        """ Returns true if self could be a net root. """
         return False
 
 
@@ -433,8 +434,8 @@ class SiteType():
 
         assert pin in self.site_pins, (self.site_type, pin,
                                        self.site_pins.keys())
-        site_pin_index, bel_pin_index, site_wire_index, direction = self.site_pins[
-            pin]
+        site_pin_index, bel_pin_index, site_wire_index, direction = \
+            self.site_pins[pin]
 
         site_pin_names = device_resources.get_site_pin(site, site_pin_index)
         assert self.site_type == site_pin_names.site_type_name, (
@@ -525,7 +526,10 @@ class TileType():
 
 
 class DeviceResources():
-    """ Object for getting specific a device resource from DeviceResources capnp. """
+    """
+    Object for getting specific a device resource representation from
+    DeviceResources capnp.
+    """
 
     def __init__(self, device_resource_capnp):
         self.device_resource_capnp = device_resource_capnp
@@ -801,7 +805,7 @@ class DeviceResources():
             will be appended). Default: self.device_resource_capnp.name
         """
 
-        if fileName = '':
+        if fileName == '':
             fileName = self.device_resource_capnp.name
 
         fileName = fileName + '.xdlrc'
@@ -814,5 +818,5 @@ class DeviceResources():
         f.write(f"(tiles {num_rows} {num_cols}\n")
 
         for tile in self.tiles:
-            f.write(f"\t(tile {tile.row} {tile.col} {sts[tile.name]} "
+            f.write(f"\t(tile {tile.row} {tile.col} {strs[tile.name]} "
                     + f"{strings[tile.type]} {len(tile.sites)}\n")
