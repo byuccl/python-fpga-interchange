@@ -271,7 +271,7 @@ class SitePip():
 
     def can_connect_via_site_wire(self, other_site, other_site_wire_index,
                                   other_direction):
-        """ Return true if self can connected to the specified site wire. """
+        """ Return true if self can connect to the specified site wire. """
         if can_connect_via_site_wire(self.site, self.in_site_wire_index,
                                      other_site, other_site_wire_index):
             return can_be_connected(Direction.Input, other_direction)
@@ -499,7 +499,7 @@ class TileType():
 
     def __init__(self, strs, tile_type, tile_type_index):
         self.tile_type_index = tile_type_index
-
+        self.name = strs[tile_type.name]
         self.string_index_to_wire_id_in_tile_type = {}
         for wire_id, string_index in enumerate(tile_type.wires):
             self.string_index_to_wire_id_in_tile_type[string_index] = wire_id
@@ -808,6 +808,8 @@ class DeviceResources():
         if fileName == '':
             fileName = self.device_resource_capnp.name
 
+        print(f"filename is {fileName}")
+
         fileName = fileName + '.xdlrc'
 
         xdlrc = open(fileName, "w+")
@@ -815,8 +817,39 @@ class DeviceResources():
         num_rows = self.tiles[-1].row + 1
         num_cols = self.tiles[-1].col + 1
 
-        f.write(f"(tiles {num_rows} {num_cols}\n")
+        print(f"(tiles {num_rows} {num_cols}")
 
         for tile in self.tiles:
-            f.write(f"\t(tile {tile.row} {tile.col} {strs[tile.name]} "
-                    + f"{strings[tile.type]} {len(tile.sites)}\n")
+            tile_name = self.strs[tile.name]
+            tile_type = self.get_tile_type(tile.type)
+            print(f"\t(tile {tile.row} {tile.col} {tile_name} "
+                  + f"{tile_type.name} {len(tile.sites)}")
+
+            num_wires = len(tile_type.string_index_to_wire_id_in_tile_type)
+            num_pips = 0
+            num_primitive_sites = 0
+
+            for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():
+                wire_name = self.strs[idx]
+                if wire_name == 'DUMMYFOO':
+                    num_wires -= 1
+                    continue
+                node_idx = self.node(tile_name, wire_name).node_index
+                myNode = self.device_resource_capnp.nodes[node_idx]
+                print(f"\t\t(wire {wire_name} {len(myNode.wires) -1}")
+
+                for w in myNode.wires:
+                    wire = self.device_resource_capnp.wires[w]
+                    conn_tile = self.strs[wire.tile]
+                    conn_wire = self.strs[wire.wire]
+
+                    if conn_wire != wire_name:
+                        print(f"\t\t\t(conn {conn_tile} {conn_wire})")
+
+                print(f"\t\t)")
+
+            print(f"\t\t(tile_summary {tile_name} {tile_type.name} "
+                  + f"{num_primitive_sites} {num_wires} {num_pips})\n\t)")
+
+            if tile_name == "T_TERM_INT_X4Y208":
+                break
