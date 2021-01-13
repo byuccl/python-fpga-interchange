@@ -336,7 +336,7 @@ class SitePip():
 
     def can_connect_via_site_wire(self, other_site, other_site_wire_index,
                                   other_direction):
-        """ Return true if self can connected to the specified site wire. """
+        """ Return true if self can connect to the specified site wire. """
         if can_connect_via_site_wire(self.site, self.in_site_wire_index,
                                      other_site, other_site_wire_index):
             return can_be_connected(Direction.Input, other_direction)
@@ -563,7 +563,7 @@ class TileType():
 
     def __init__(self, strs, tile_type, tile_type_index):
         self.tile_type_index = tile_type_index
-
+        self.name = strs[tile_type.name]
         self.string_index_to_wire_id_in_tile_type = {}
         for wire_id, string_index in enumerate(tile_type.wires):
             self.string_index_to_wire_id_in_tile_type[string_index] = wire_id
