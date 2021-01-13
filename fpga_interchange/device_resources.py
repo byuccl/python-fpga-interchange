@@ -831,10 +831,11 @@ class DeviceResources():
 
             for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():
                 wire_name = self.strs[idx]
-                if wire_name == 'DUMMYFOO':
+                try:
+                    node_idx = self.node(tile_name, wire_name).node_index
+                except AssertionError as e:
                     num_wires -= 1
                     continue
-                node_idx = self.node(tile_name, wire_name).node_index
                 myNode = self.device_resource_capnp.nodes[node_idx]
                 print(f"\t\t(wire {wire_name} {len(myNode.wires) -1}")
 
