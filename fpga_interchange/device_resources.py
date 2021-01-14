@@ -1078,13 +1078,56 @@ class DeviceResources():
         if self.parameter_definitions is None:
             self.init_parameter_definitions()
 
-        if cell_type not in self.parameters_for_cell:
-            return
 
-        for parameter_name in self.parameters_for_cell[cell_type]:
-            if parameter_name in property_map:
+<< << << < HEAD
+   if cell_type not in self.parameters_for_cell:
+        return
+
+    for parameter_name in self.parameters_for_cell[cell_type]:
+        if parameter_name in property_map:
+            continue
+
+        key = (cell_type, parameter_name)
+        property_map[parameter_name] = self.parameter_definitions[
+            key].default_value
+== =====
+   xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
+
+    for tile in self.tiles:
+        tile_name = self.strs[tile.name]
+        tile_type = self.get_tile_type(tile.type)
+        xdlrc.write(f"\t(tile {tile.row} {tile.col} {tile_name} "
+                    + f"{tile_type.name} {len(tile.sites)}\n")
+
+        num_wires = len(tile_type.string_index_to_wire_id_in_tile_type)
+        num_pips = 0
+        num_primitive_sites = 0
+
+        for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():
+            wire_name = self.strs[idx]
+            try:
+                node_idx = self.node(tile_name, wire_name).node_index
+            except AssertionError as e:
+                num_wires -= 1
                 continue
+            myNode = self.device_resource_capnp.nodes[node_idx]
+            xdlrc.write(
+                f"\t\t(wire {wire_name} {len(myNode.wires) -1}\n")
 
-            key = (cell_type, parameter_name)
-            property_map[parameter_name] = self.parameter_definitions[
-                key].default_value
+            for w in myNode.wires:
+                wire = self.device_resource_capnp.wires[w]
+                conn_tile = self.strs[wire.tile]
+                conn_wire = self.strs[wire.wire]
+
+                if conn_wire != wire_name:
+                    xdlrc.write(
+                        f"\t\t\t(conn {conn_tile} {conn_wire})\n")
+
+            xdlrc.write(f"\t\t)\n")
+
+        xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
+        xdlrc.write(f"{num_primitive_sites} {num_wires} {num_pips})\n")
+        xdlrc.write(f"\t)\n")
+        if tile_name == "T_TERM_INT_X4Y208":
+            break
+>>>>>> > debug conns and wires in generate_xdlrc
