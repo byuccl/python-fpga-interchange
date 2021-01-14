@@ -808,8 +808,6 @@ class DeviceResources():
         if fileName == '':
             fileName = self.device_resource_capnp.name
 
-        print(f"filename is {fileName}")
-
         fileName = fileName + '.xdlrc'
 
         xdlrc = open(fileName, "w+")
@@ -817,13 +815,13 @@ class DeviceResources():
         num_rows = self.tiles[-1].row + 1
         num_cols = self.tiles[-1].col + 1
 
-        print(f"(tiles {num_rows} {num_cols}")
+        xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
 
         for tile in self.tiles:
             tile_name = self.strs[tile.name]
             tile_type = self.get_tile_type(tile.type)
-            print(f"\t(tile {tile.row} {tile.col} {tile_name} "
-                  + f"{tile_type.name} {len(tile.sites)}")
+            xdlrc.write(f"\t(tile {tile.row} {tile.col} {tile_name} "
+                        + f"{tile_type.name} {len(tile.sites)}\n")
 
             num_wires = len(tile_type.string_index_to_wire_id_in_tile_type)
             num_pips = 0
@@ -837,7 +835,8 @@ class DeviceResources():
                     num_wires -= 1
                     continue
                 myNode = self.device_resource_capnp.nodes[node_idx]
-                print(f"\t\t(wire {wire_name} {len(myNode.wires) -1}")
+                xdlrc.write(
+                    f"\t\t(wire {wire_name} {len(myNode.wires) -1}\n")
 
                 for w in myNode.wires:
                     wire = self.device_resource_capnp.wires[w]
@@ -845,12 +844,13 @@ class DeviceResources():
                     conn_wire = self.strs[wire.wire]
 
                     if conn_wire != wire_name:
-                        print(f"\t\t\t(conn {conn_tile} {conn_wire})")
+                        xdlrc.write(
+                            f"\t\t\t(conn {conn_tile} {conn_wire})\n")
 
-                print(f"\t\t)")
+                xdlrc.write(f"\t\t)\n")
 
-            print(f"\t\t(tile_summary {tile_name} {tile_type.name} "
-                  + f"{num_primitive_sites} {num_wires} {num_pips})\n\t)")
-
+            xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
+            xdlrc.write(f"{num_primitive_sites} {num_wires} {num_pips})\n")
+            xdlrc.write(f"\t)\n")
             if tile_name == "T_TERM_INT_X4Y208":
                 break
