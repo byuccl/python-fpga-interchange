@@ -3,10 +3,20 @@ Functions for comparing two XDLRC files.
 
 Used to test the output of DeviceResources.generate_xdlrc()
 Tiles are expected to be in the same order in both files.  Everything
-else can be out of order.  Only XDLRC_KEY_WORD declarations supported.
+else can be out of order.  Only declarations contained in XDLRC_KEY_WORD
+are supported (case-insensitive).  If an unknown declaration is
+encountered, the line is skipped and a warning is printed.
 """
 
-XDLRC_KEY_WORD = ['#', 'tiles', 'tile', 'wire', 'conn', 'tile_summary']
+import debugpy
+from collections import namedTuple
+
+KeyWords = namedTuple('KeyWords', 'comment tiles tile wire conn tile_summary')
+
+XDLRC_KEY_WORD = KeyWords('#', 'TILES', 'TILE', 'WIRE', 'CONN', 'TILE_SUMMARY')
+
+TEST_XDLRC = '/home/reilly/interchange/xc7a100t.xdlrc'
+CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
 
 
 def get_line(*argv):
@@ -29,14 +39,17 @@ def get_line(*argv):
     for f in argv:
         line = []
         while True:
-            line = f.readline().strip("()\n\t ").lower()
+            line = f.readline()
             if not line:
                 line = []
                 break
-            line = line.split()
+            line = line.strip("()\n\t ")
+            if not line:
+                continue
+            line = line.upper().split()
             if line[0] not in XDLRC_KEY_WORD:
                 print(f"Warning: Unknown Key word {line[0]}. Ignoring line.")
-            elif line[0][0] != '#':
+            elif line[0][0] != XDLRC_KEY_WORD.comment:
                 break
         ret.append(line)
     if len(ret) == 1:
@@ -65,41 +78,70 @@ def build_tile_db(myFile):
     wires = []
     conns = {}
     line = get_line(myFile)
-    while line and line[0] != 'tile_summary':
-        if line[0] == 'wire':
+    while line and line[0] != XDLRC_KEY_WORD.tile_summary:
+        if line[0] == XDLRC_KEY_WORD[3]:
             wires.append(line[1])
             conns[line[1]] = []
             line = get_line(myFile)
-            while line and line[0] != 'wire' and line[0] != 'tile_summary':
+            while line and line[0] != XDLRC_KEY_WORD[4]:
                 conns[wires[-1]].append(tuple([line[1], line[2]]))
                 line = get_line(myFile)
     return [wires, conns, line]
 
 
+def assert_equal(obj1, obj2):
+    """
+    Run assert for equality on two objects.
+
+    Catches AssertionError and prints it. Returns a bool of (obj1 == obj2)
+    """
+
+    try:
+        assert obj1 == obj2
+    except AssertionError as e:
+        print(f"AssertionError caught.\nObj1:\n{obj1}\n\nObj2:\n{obj2}\n\n")
+        raise AssertionError
+        return False
+    return True
+
+
 def compare_xdlrc(file1, file2):
+    """
+    Compare two xdlrc files for equality.
+
+    Tiles must be listed in the same order.  Everything else can be out
+    of order. Assumes that one of the xdlrc files has been generated
+    correctly and the other file is being checked against it for
+    correctness.
+    """
     with open(file1, "r") as f1, open(file2, "r") as f2:
         line1 = [None]
         line2 = [None]
-        while line1 and line2:
-            line1, line2 = get_line(f1, f2)
-            assert line1 == line2  # check tile row_num col_num declaration
 
+        line1, line2 = get_line(f1, f2)
+        # check tile row_num col_num declaration
+        assert_equal(line1, line2)
+        while line1 and line2:
+            debugpy.breakpoint()
             line1, line2 = get_line(f1, f2)
-            assert line1 == line2  # check tile declaration
+            assert_equal(line1, line2)  # check tile declaration
 
             wires1, conns1, line1 = build_tile_db(f1)
             wires2, conns2, line2 = build_tile_db(f2)
 
             wires1.sort()
             wires2.sort()
-
-            assert wires1 == wires2
+            assert_equal(wires1, wires2)
 
             for w1, w2 in zip(wires1, wires2):
                 c1 = conns1[w1].sort()
                 c2 = conns2[w2].sort()
-                assert c1 == c2
-            assert line1 == line2
+                assert_equal(c1, c2)
+            assert_equal(line1, line2)
 
         print(f"file {'1' if not line1 else ''} {'2' if not line2 else ''}"
               + f" reached EOF")
+
+
+if __name__ == "__main__":
+    compare_xdlrc(TEST_XDLRC, CORRECT_XDLRC)
