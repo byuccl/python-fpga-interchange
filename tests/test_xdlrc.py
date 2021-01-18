@@ -1,22 +1,28 @@
 """
 Functions for comparing two XDLRC files.
 
-Used to test the output of DeviceResources.generate_xdlrc()
-Tiles are expected to be in the same order in both files.  Everything
-else can be out of order.  Only declarations contained in XDLRC_KEY_WORD
-are supported (case-insensitive).  If an unknown declaration is
-encountered, the line is skipped and a warning is printed.
+Used to test DeviceResources.generate_xdlrc().  Generates and checks for
+correctness an XDLRC file for xc7a100tcsg-1 part. Only declarations
+contained in XDLRC_KEY_WORD are currently supported (case-insensitive).
+If an unknown declaration is encountered, the line is skipped and a
+warning is printed.
+
+To be ran in the root directory of the python-fpga-interchange project.
 """
 
 import debugpy
 from collections import namedtuple
+from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
 
 KeyWords = namedtuple('KeyWords', 'comment tiles tile wire conn summary')
 
 XDLRC_KEY_WORD = KeyWords('#', 'TILES', 'TILE', 'WIRE', 'CONN', 'TILE_SUMMARY')
 
-TEST_XDLRC = '/home/reilly/interchange/xc7a100t.xdlrc'
+# TODO change these paths so they are not hard coded
+TEST_XDLRC = 'xc7a100t.xdlrc'
 CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
+SCHEMA_DIR = "/home/reilly/RW/RapidWright/interchange"
+TEST_DEVICE_FILE = "/home/reilly/RW/RapidWright/xc7a100t.device"
 
 
 def get_line(*argv):
@@ -115,7 +121,7 @@ def compare_xdlrc(file1, file2):
     Tiles must be listed in the same order.  Everything else can be out
     of order. Assumes that one of the xdlrc files has been generated
     correctly and the other file is being checked against it for
-    correctness.
+    correctness. 
     """
     with open(file1, "r") as f1, open(file2, "r") as f2:
         line1 = [None]
@@ -143,4 +149,7 @@ def compare_xdlrc(file1, file2):
 
 
 if __name__ == "__main__":
+    myDevice = Interchange(SCHEMA_DIR).read_device_resources(TEST_DEVICE_FILE)
+    myDevice.generate_XDLRC()
+
     compare_xdlrc(TEST_XDLRC, CORRECT_XDLRC)
