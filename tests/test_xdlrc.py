@@ -9,9 +9,9 @@ encountered, the line is skipped and a warning is printed.
 """
 
 import debugpy
-from collections import namedTuple
+from collections import namedtuple
 
-KeyWords = namedTuple('KeyWords', 'comment tiles tile wire conn tile_summary')
+KeyWords = namedtuple('KeyWords', 'comment tiles tile wire conn summary')
 
 XDLRC_KEY_WORD = KeyWords('#', 'TILES', 'TILE', 'WIRE', 'CONN', 'TILE_SUMMARY')
 
@@ -41,7 +41,8 @@ def get_line(*argv):
         while True:
             line = f.readline()
             if not line:
-                line = []
+                # EOF is reached in this file. end of parse
+                print(f"file reached EOF\n\n")
                 break
             line = line.strip("()\n\t ")
             if not line:
@@ -78,14 +79,16 @@ def build_tile_db(myFile):
     wires = []
     conns = {}
     line = get_line(myFile)
-    while line and line[0] != XDLRC_KEY_WORD.tile_summary:
-        if line[0] == XDLRC_KEY_WORD[3]:
+    while line and line[0] != XDLRC_KEY_WORD.summary:
+        if line[0] == XDLRC_KEY_WORD.wire:
             wires.append(line[1])
             conns[line[1]] = []
             line = get_line(myFile)
-            while line and line[0] != XDLRC_KEY_WORD[4]:
+            while line and line[0] == XDLRC_KEY_WORD.conn:
                 conns[wires[-1]].append(tuple([line[1], line[2]]))
                 line = get_line(myFile)
+        else:
+            line = get_line(myFile)
     return [wires, conns, line]
 
 
@@ -122,7 +125,6 @@ def compare_xdlrc(file1, file2):
         # check tile row_num col_num declaration
         assert_equal(line1, line2)
         while line1 and line2:
-            debugpy.breakpoint()
             line1, line2 = get_line(f1, f2)
             assert_equal(line1, line2)  # check tile declaration
 
@@ -138,9 +140,6 @@ def compare_xdlrc(file1, file2):
                 c2 = conns2[w2].sort()
                 assert_equal(c1, c2)
             assert_equal(line1, line2)
-
-        print(f"file {'1' if not line1 else ''} {'2' if not line2 else ''}"
-              + f" reached EOF")
 
 
 if __name__ == "__main__":
