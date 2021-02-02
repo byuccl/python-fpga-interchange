@@ -121,7 +121,7 @@ def compare_xdlrc(file1, file2):
     Tiles must be listed in the same order.  Everything else can be out
     of order. Assumes that one of the xdlrc files has been generated
     correctly and the other file is being checked against it for
-    correctness. 
+    correctness.
     """
     with open(file1, "r") as f1, open(file2, "r") as f2:
         line1 = [None]
