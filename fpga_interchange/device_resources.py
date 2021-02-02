@@ -1013,6 +1013,7 @@ class DeviceResources():
             cell_type (str) - Cell type to get default parameters for.
             property_map (dict-like of str to str) - Property map for cell.
 
+
         """
         if self.parameter_definitions is None:
             self.init_parameter_definitions()
