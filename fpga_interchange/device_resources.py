@@ -500,6 +500,7 @@ class TileType():
     def __init__(self, strs, tile_type, tile_type_index):
         self.tile_type_index = tile_type_index
         self.name = strs[tile_type.name]
+        self.wires = tile_type.wires
         self.string_index_to_wire_id_in_tile_type = {}
         for wire_id, string_index in enumerate(tile_type.wires):
             self.string_index_to_wire_id_in_tile_type[string_index] = wire_id
@@ -819,38 +820,58 @@ class DeviceResources():
 
         for tile in self.tiles:
             tile_name = self.strs[tile.name]
-            tile_type = self.get_tile_type(tile.type)
-            xdlrc.write(f"\t(tile {tile.row} {tile.col} {tile_name} "
-                        + f"{tile_type.name} {len(tile.sites)}\n")
+            if (tile_name == 'INT_R_X3Y199'):
 
-            num_wires = len(tile_type.string_index_to_wire_id_in_tile_type)
-            num_pips = 0
-            num_primitive_sites = 0
+                tile_type = self.get_tile_type(tile.type)
+                wires = tile_type.wires
+                pips = tile_type.pips
+                xdlrc.write(f"\t(tile {tile.row} {tile.col} {tile_name} "
+                            + f"{tile_type.name} {len(tile.sites)}\n")
 
-            for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():
-                wire_name = self.strs[idx]
-                try:
-                    node_idx = self.node(tile_name, wire_name).node_index
-                except AssertionError as e:
-                    num_wires -= 1
-                    continue
-                myNode = self.device_resource_capnp.nodes[node_idx]
-                xdlrc.write(
-                    f"\t\t(wire {wire_name} {len(myNode.wires) -1}\n")
+                num_wires = len(wires)
+                num_pips = len(pips)
+                num_primitive_sites = len(tile.sites)
 
-                for w in myNode.wires:
-                    wire = self.device_resource_capnp.wires[w]
-                    conn_tile = self.strs[wire.tile]
-                    conn_wire = self.strs[wire.wire]
+                for site in tile.sites:
+                    site_name = self.strs[site.name]
+                    site_t_name, site = self.site_name_to_site(
+                        site_name).items()
+                    site_t = self.get_site_type(site.site_type_idx)
+                    print(f"\t\t(primitive_site {site_name} {site_t_name} "
+                          + f"{} {len(site_t.site_pins.keys())}")
 
-                    if conn_wire != wire_name:
-                        xdlrc.write(
-                            f"\t\t\t(conn {conn_tile} {conn_wire})\n")
+                    for pin_name, pin in site_t.site_pins.items():
+                        dir = pin[3].replace("Direction.", '').lower()
+                        print(f"(pinwire {pin_name} {dir}")
+                    printf(f"\t\t)")
 
-                xdlrc.write(f"\t\t)\n")
+                for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():  # noqa
+                    wire_name = self.strs[idx]
+                    try:
+                        node_idx = self.node(tile_name, wire_name).node_index
+                    except AssertionError as e:
+                        num_wires -= 1
+                        continue
+                    myNode = self.device_resource_capnp.nodes[node_idx]
+                    xdlrc.write(
+                        f"\t\t(wire {wire_name} {len(myNode.wires) -1}\n")
 
-            xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
-            xdlrc.write(f"{num_primitive_sites} {num_wires} {num_pips})\n")
-            xdlrc.write(f"\t)\n")
-            if tile_name == "T_TERM_INT_X4Y208":
-                break
+                    for w in myNode.wires:
+                        wire = self.device_resource_capnp.wires[w]
+                        conn_tile = self.strs[wire.tile]
+                        conn_wire = self.strs[wire.wire]
+
+                        if conn_wire != wire_name:
+                            xdlrc.write(
+                                f"\t\t\t(conn {conn_tile} {conn_wire})\n")
+
+                    xdlrc.write(f"\t\t)\n")
+
+                for p in pips:
+                    xdlrc.write(
+                        f"\t\t(pip {tile_name} {self.strs[wires[p.wire0]]} ->"
+                        + f" {self.strs[wires[p.wire1]]})\n")
+
+                xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
+                xdlrc.write(f"{num_primitive_sites} {num_wires} {num_pips})\n")
+                xdlrc.write(f"\t)\n")
