@@ -86,6 +86,16 @@ def file_init(*argv):
     get_line(*argv)
 
 
+class PinWire(namedtuple('PinWire', 'name dir type')):
+    def __eq__(self, other):
+        return ((self.name == other.name) and (self.dir == other.dir)
+                and (self.type == other.type))
+
+
+unknowns = []
+lines = {}
+
+
 def get_line(*argv):
     """
     Get the next eligible line in one or both XDLRC files.
