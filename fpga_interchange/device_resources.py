@@ -1016,14 +1016,8 @@ class DeviceResources():
         If parameter is not already set, sets that parameter to its default
         value.
         Arguments:
-<<<<<<< HEAD
             cell_type (str) - Cell type to get default parameters for.
             property_map (dict-like of str to str) - Property map for cell.
-=======
-            cell_type(str) - Cell type to get default parameters for.
-            property_map(dict-like of str to str) - Property map for cell.
-
->>>>>>> XDLRC in now a class that extends DeviceResources
         """
         if self.parameter_definitions is None:
             self.init_parameter_definitions()
