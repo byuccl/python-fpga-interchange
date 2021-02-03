@@ -559,8 +559,6 @@ class DeviceResources():
 
         self.tile_name_to_tile = {}
         self.site_name_to_site = {}
-        self.tiles = []
-        tiles_by_row = [[]]
         for tile_idx, tile in enumerate(self.device_resource_capnp.tileList):
             tile_name = self.strs[tile.name]
             tile_name_index = self.string_index[tile_name]
@@ -570,14 +568,6 @@ class DeviceResources():
                 tile_index=tile_idx,
                 tile_name_index=tile_name_index,
                 tile_type_index=tile_type_index)
-
-            # Create a list of lists of tiles by row
-            if len(tiles_by_row) <= tile.row:
-                for i in range(tile.row - len(tiles_by_row)):
-                    tiles_by_row.append([])
-                tiles_by_row.append([tile])
-            else:
-                tiles_by_row[tile.row].append(tile)
 
             for site_idx, site in enumerate(tile.sites):
                 site_name = self.strs[site.name]
@@ -609,23 +599,7 @@ class DeviceResources():
                         site_type_index=alt_site_type_index,
                         alt_index=alt_index)
 
-        # sort each row list by column and then attach to master tile list
-        for tile_row in tiles_by_row:
-            tile_row.sort(key=DeviceResources.__sort_tile_cols__)
-            self.tiles += tile_row
-
         self.tile_wire_index_to_node_index = None
-
-    def __sort_tile_cols__(tile):
-        """
-        Helper function for sort.
-
-        NOT designed for use outside of being a key function for sort().
-        Helps sort() sort the tiles based on col number
-
-        NOTE: self is purposely not included as the first arguement.
-        """
-        return tile.col
 
     def build_node_index(self):
         """ Build node index for looking up wires to nodes. """
@@ -797,6 +771,60 @@ class DeviceResources():
             pin_name=pin_name,
             wire_name=wire_name)
 
+
+class XDLRC(DeviceResources):
+    """
+    Class for generating XDLRC files from Interchange device resources.
+
+    This class contains the main/helper routines associated with
+    generating a XDLRC file.  Creating an instance of the class
+    automatically will generate the XDLRC file.
+
+    Constructor Parameters:
+    device_rep (DeviceResources)
+    file_name (String) - filename for xdlrc file (.xdlrc extension will
+                         be appended). 
+                         Default: device_resource_capnp.name
+    """
+
+    def __sort_tile_cols__(tile):
+        """
+        Helper function for sort.
+
+        NOT designed for use outside of being a key function for sort().
+        Helps sort() sort the tiles based on col number
+
+        NOTE: self is purposely not included as the first arguement.
+        """
+        return tile.col
+
+    def __init__(self, device_resource_capnp, fileName=''):
+        super().__init__(device_resource_capnp)
+
+        self.tiles = []
+        tiles_by_row = [[]]
+        for tile in self.device_resource_capnp.tileList:
+            # Create a list of lists of tiles by row
+            if len(tiles_by_row) <= tile.row:
+                for i in range(tile.row - len(tiles_by_row)):
+                    tiles_by_row.append([])
+                tiles_by_row.append([tile])
+            else:
+                tiles_by_row[tile.row].append(tile)
+
+        # sort each row list by column and then attach to master tile list
+        for tile_row in tiles_by_row:
+            tile_row.sort(key=XDLRC.__sort_tile_cols__)
+            self.tiles += tile_row
+
+        self.generate_XDLRC(fileName)
+
+    Direction_strs = ("Input", "Output", "Inout")
+
+    def Direction_to_str(dir):
+        """.logical_netlist.Direction to XDLRC direction string"""
+        return
+
     def generate_XDLRC(self, fileName=''):
         """
         UNDER CONSTRUCTION
@@ -820,7 +848,7 @@ class DeviceResources():
 
         for tile in self.tiles:
             tile_name = self.strs[tile.name]
-            if (tile_name == 'INT_R_X3Y199'):
+            if (tile_name == 'LIOB33_SING_X0Y199'):
 
                 tile_type = self.get_tile_type(tile.type)
                 wires = tile_type.wires
@@ -834,16 +862,19 @@ class DeviceResources():
 
                 for site in tile.sites:
                     site_name = self.strs[site.name]
-                    site_t_name, site = self.site_name_to_site(
-                        site_name).items()
-                    site_t = self.get_site_type(site.site_type_idx)
+                    site_t_info = self.site_name_to_site[
+                        site_name]
+                    assert len(list(site_t_info)) < 2
+                    site_t_name = list(site_t_info)[0]
+                    site = site_t_info[site_t_name]
+                    site_t = self.get_site_type(site.site_type_index)
                     print(f"\t\t(primitive_site {site_name} {site_t_name} "
-                          + f"{} {len(site_t.site_pins.keys())}")
+                          + f"{''} {len(site_t.site_pins.keys())}")
 
                     for pin_name, pin in site_t.site_pins.items():
-                        dir = pin[3].replace("Direction.", '').lower()
+                        dir = pin[3].name.lower()
                         print(f"(pinwire {pin_name} {dir}")
-                    printf(f"\t\t)")
+                    print(f"\t\t)")
 
                 for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():  # noqa
                     wire_name = self.strs[idx]
@@ -875,3 +906,4 @@ class DeviceResources():
                 xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
                 xdlrc.write(f"{num_primitive_sites} {num_wires} {num_pips})\n")
                 xdlrc.write(f"\t)\n")
+                break
