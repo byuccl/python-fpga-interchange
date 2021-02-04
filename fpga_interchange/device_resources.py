@@ -951,8 +951,12 @@ class XDLRC(DeviceResources):
         """
         return tile.col
 
-    def __init__(self, device_resource_capnp, fileName=''):
-        super().__init__(device_resource_capnp)
+    def __init__(self, device_resource, fileName=''):
+        if type(device_resource) is DeviceResources:
+            # TODO test this feature
+            self.__dict__ = device_resource.__dict__.copy()
+        else:
+            super().__init__(device_resource)
 
         self.tiles = []
         tiles_by_row = [[]]
