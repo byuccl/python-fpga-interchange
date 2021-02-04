@@ -866,16 +866,17 @@ class XDLRC(DeviceResources):
                     site_t_name = list(site_t_info)[0]
                     site = site_t_info[site_t_name]
                     site_t = self.get_site_type(site.site_type_index)
-                    xdlrc.write(f"\t\t(primitive_site {site_name} {site_t_name} "
-                                + f"{''} {len(site_t.site_pins.keys())}\n")
+                    xdlrc.write(f"\t\t(primitive_site {site_name} "
+                                + f"{site_t_name} "
+                                + f"{len(site_t.site_pins.keys())}\n")
 
                     for idx, pin in enumerate(site_t.site_pins.items()):
                         pin_wire = self.get_site_pin(site, idx).wire_name
                         pin_name = pin[0]  # key value is pin_name
                         pin = pin[1]  # value is pin data
                         dir = pin[3].name.lower()
-                        xdlrc.write(
-                            f"\t\t\t(pinwire {pin_name} {dir} {pin_wire})\n")
+                        xdlrc.write(f"\t\t\t(pinwire {pin_name} "
+                                    + f"{dir} {pin_wire})\n")
                     xdlrc.write(f"\t\t)\n")
 
                 for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():  # noqa
