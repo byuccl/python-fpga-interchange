@@ -28,7 +28,7 @@ TEST_XDLRC = 'xc7a100t.xdlrc'
 CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
 # CORRECT_XDLRC = '/home/reilly/partial.xdlrc'
 SCHEMA_DIR = "/home/reilly/RW/RapidWright/interchange"
-TEST_DEVICE_FILE = "/home/reilly/RW/RapidWright/xc7a100t.device"
+DEVICE_FILE = "/home/reilly/RW/RapidWright/xc7a100t.device"
 
 
 class PinWire(namedtuple('PinWire', 'name dir type')):
@@ -203,30 +203,30 @@ def init():
     SCRIPT_DIR = os.path.dirname(os.path.realpath(
         os.path.join(os.getcwd(), os.path.expanduser(__file__))))
     sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR, PACKAGE_PARENT)))
-    from fpga_interchange.interchange_capnp import Interchange
 
-    return Interchange(SCHEMA_DIR).read_device_resources(TEST_DEVICE_FILE)
+    from fpga_interchange.device_resources import XDLRC
+    from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
+
+    device_schema = Interchange(SCHEMA_DIR).device_resources_schema.Device
+    return XDLRC(read_capnp_file(device_schema, DEVICE_FILE),
+                 TEST_XDLRC.replace(".xdlrc", ''))
 
 
 if __name__ == "__main__":
 
     myDevice = init()
 
-    # start = time.perf_counter()
-    # myDevice.generate_XDLRC()
-    # print(f"XDLRC file generated in {time.perf_counter() - start} seconds")
-
     # compare_xdlrc(TEST_XDLRC, CORRECT_XDLRC)
 
     # See what is not supported yet
-    with open(CORRECT_XDLRC, 'r') as f:
-        while True:
-            line = get_line(f)
-            if line[0] == XDLRC_KEY_WORD.site:
-                print(lines[f.name])
-                print(line)
-                break
-        print('done')
+    # with open(CORRECT_XDLRC, 'r') as f:
+    #     while True:
+    #         line = get_line(f)
+    #         if line[0] == XDLRC_KEY_WORD.site:
+    #             print(lines[f.name])
+    #             print(line)
+    #             break
+    #     print('done')
 
-        site_name = myDevice.strs[tile.sites[0].name]
-        site = d.site_name_to_site[site_name]   # site is dict
+    #     site_name = myDevice.strs[tile.sites[0].name]
+    #     site = d.site_name_to_site[site_name]   # site is dict
