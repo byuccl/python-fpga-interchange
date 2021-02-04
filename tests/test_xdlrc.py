@@ -48,6 +48,7 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
 
 TEST_XDLRC = 'xc7a100t.xdlrc'
 CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
+<< << << < HEAD
 # TODO: make these paths not hard-coded
 SCHEMA_DIR = "/home/reilly/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
 DEVICE_FILE = "/home/reilly/xc7a100t.device"
@@ -84,6 +85,13 @@ def file_init(*argv):
         f.line_num = 0
         f.line = []
     get_line(*argv)
+
+
+== == == =
+# CORRECT_XDLRC = '/home/reilly/partial.xdlrc'
+SCHEMA_DIR = "/home/reilly/RW/RapidWright/interchange"
+DEVICE_FILE = "/home/reilly/RW/RapidWright/xc7a100t.device"
+>>>>>> > fixed bug in init
 
 
 class PinWire(namedtuple('PinWire', 'name dir type')):
