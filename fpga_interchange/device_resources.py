@@ -56,7 +56,8 @@ class Tile(
 class Site(
         namedtuple(
             'Site',
-            'tile_index tile_name_index site_index tile_type_site_type_index site_type_index alt_index site_type_name'
+            'tile_index tile_name_index site_index tile_type_site_type_index '
+            + 'site_type_index alt_index site_type_name'
         )):
     pass
 
@@ -586,7 +587,8 @@ class CellBelMapping():
 
                 pin_map[bel_pin] = strs[pin.cellPin]
 
-            for parameter_site_type_and_bel in parameter_pins.parametersSiteTypes:
+            siteTypes = parameter_pins.parametersSiteTypes
+            for parameter_site_type_and_bel in siteTypes:
                 site_type = strs[parameter_site_type_and_bel.siteType]
                 bel = strs[parameter_site_type_and_bel.bel]
 
@@ -982,9 +984,9 @@ class XDLRC(DeviceResources):
                         pin_wire = self.get_site_pin(site, idx).wire_name
                         pin_name = pin[0]  # key value is pin_name
                         pin = pin[1]  # value is pin data
-                        dir = pin[3].name.lower()
+                        direction = pin[3].name.lower()
                         xdlrc.write(f"\t\t\t(pinwire {pin_name} "
-                                    + f"{dir} {pin_wire})\n")
+                                    + f"{direction} {pin_wire})\n")
                     xdlrc.write(f"\t\t)\n")
 
                 for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():  # noqa
@@ -1018,3 +1020,21 @@ class XDLRC(DeviceResources):
                 xdlrc.write(f"{num_primitive_sites} {num_wires} {num_pips})\n")
                 xdlrc.write(f"\t)\n")
                 return
+
+        xdlrc.write(f")\n (primitive_defs {''}\n")
+        for idx in range(len(self.device_resource_capnp.siteTypeList)):
+            site_t = self.get_site_type(idx)
+
+            for pin_name, pin in site_t.site_pins.items():
+                direction = pin[3].name.lower()
+                xdlrc.write(
+                    f"\t\t(pinwire {pin_name} {pin_name} {direction})\n")
+
+            for bel in site_t.bels:
+                xdlrc.write(f"\t\t(element {bel.name} {len(bel.bel_pins)}\n")
+                for bel_pin in bel.bel_pins:
+                    bel_pin_index = site_t.bel_pin_index[bel_pin]
+                    bel_info = site_t.bel_pins[bel_pin_index]
+                    direction = bel_info[2].name.lower()
+                    xdlrc.write(
+                        f"\t\t\t(pin {bel_pin_index[1]} {direction})\n")
