@@ -783,7 +783,7 @@ class XDLRC(DeviceResources):
     Constructor Parameters:
     device_rep (DeviceResources)
     file_name (String) - filename for xdlrc file (.xdlrc extension will
-                         be appended). 
+                         be appended).
                          Default: device_resource_capnp.name
     """
 
@@ -798,8 +798,12 @@ class XDLRC(DeviceResources):
         """
         return tile.col
 
-    def __init__(self, device_resource_capnp, fileName=''):
-        super().__init__(device_resource_capnp)
+    def __init__(self, device_resource, fileName=''):
+        if type(device_resource) is DeviceResources:
+            # TODO test this feature
+            self.__dict__ = device_resource.__dict__.copy()
+        else:
+            super().__init__(device_resource)
 
         self.tiles = []
         tiles_by_row = [[]]
@@ -818,12 +822,6 @@ class XDLRC(DeviceResources):
             self.tiles += tile_row
 
         self.generate_XDLRC(fileName)
-
-    Direction_strs = ("Input", "Output", "Inout")
-
-    def Direction_to_str(dir):
-        """.logical_netlist.Direction to XDLRC direction string"""
-        return
 
     def generate_XDLRC(self, fileName=''):
         """
@@ -868,13 +866,17 @@ class XDLRC(DeviceResources):
                     site_t_name = list(site_t_info)[0]
                     site = site_t_info[site_t_name]
                     site_t = self.get_site_type(site.site_type_index)
-                    print(f"\t\t(primitive_site {site_name} {site_t_name} "
-                          + f"{''} {len(site_t.site_pins.keys())}")
+                    xdlrc.write(f"\t\t(primitive_site {site_name} {site_t_name} "
+                                + f"{''} {len(site_t.site_pins.keys())}\n")
 
-                    for pin_name, pin in site_t.site_pins.items():
+                    for idx, pin in enumerate(site_t.site_pins.items()):
+                        pin_wire = self.get_site_pin(site, idx).wire_name
+                        pin_name = pin[0]  # key value is pin_name
+                        pin = pin[1]  # value is pin data
                         dir = pin[3].name.lower()
-                        print(f"(pinwire {pin_name} {dir}")
-                    print(f"\t\t)")
+                        xdlrc.write(
+                            f"\t\t\t(pinwire {pin_name} {dir} {pin_wire})\n")
+                    xdlrc.write(f"\t\t)\n")
 
                 for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():  # noqa
                     wire_name = self.strs[idx]
@@ -906,4 +908,4 @@ class XDLRC(DeviceResources):
                 xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
                 xdlrc.write(f"{num_primitive_sites} {num_wires} {num_pips})\n")
                 xdlrc.write(f"\t)\n")
-                break
+                return
