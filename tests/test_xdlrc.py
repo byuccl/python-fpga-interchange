@@ -123,6 +123,8 @@ def build_tile_db(myFile):
             while line and line[0] == XDLRC_KEY_WORD.conn:
                 conns[wires[-1]].append(tuple([line[1], line[2]]))
                 line = get_line(myFile)
+
+        # TODO primitive_site verification
         # elif line[0] == XDLRC_KEY_WORD.site:
         #     site =
         #     while line and line[0] == XDLRC_KEY_WORD.pinwire:
