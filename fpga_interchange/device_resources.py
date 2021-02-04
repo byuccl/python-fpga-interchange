@@ -105,7 +105,8 @@ class Tile(
 class Site(
         namedtuple(
             'Site',
-            'tile_index tile_name_index site_index tile_type_site_type_index site_type_index alt_index site_type_name'
+            'tile_index tile_name_index site_index tile_type_site_type_index '
+            + 'site_type_index alt_index site_type_name'
         )):
     pass
 
@@ -623,7 +624,8 @@ class CellBelMapping():
 
                 pin_map[bel_pin] = strs[pin.cellPin]
 
-            for parameter_site_type_and_bel in parameter_pins.parametersSiteTypes:
+            siteTypes = parameter_pins.parametersSiteTypes
+            for parameter_site_type_and_bel in siteTypes:
                 site_type = strs[parameter_site_type_and_bel.siteType]
                 bel = strs[parameter_site_type_and_bel.bel]
 
