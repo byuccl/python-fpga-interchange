@@ -88,7 +88,7 @@ class XDLRC(DeviceResources):
 
         self.tiles = []
         tiles_by_row = [[]]
-        for tile in self.device_resource_capnp.tileList:
+        for tile in raw_repr.tileList:
             # Create a list of lists of tiles by row
             if len(tiles_by_row) <= tile.row:
                 for i in range(tile.row - len(tiles_by_row)):
