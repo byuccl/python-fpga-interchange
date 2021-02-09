@@ -868,8 +868,6 @@ class DeviceResources():
             pin_name=pin_name,
             wire_name=wire_name)
 
-
-<< << << < HEAD
    def get_constraints(self):
         constraints = Constraints()
         constraints.read_constraints(self.device_resource_capnp.constraints)
@@ -895,62 +893,6 @@ class DeviceResources():
         from fpga_interchange.interchange_capnp import to_logical_netlist
         return to_logical_netlist(self.device_resource_capnp.primLibs,
                                   self.strs)
-
-    def get_constants(self):
-        constants = self.device_resource_capnp.constants
-== == == =
-
-
-class XDLRC(DeviceResources):
-    """
-    Class for generating XDLRC files from Interchange device resources.
-
-    This class contains the main/helper routines associated with
-    generating a XDLRC file.  Creating an instance of the class
-    automatically will generate the XDLRC file.
-
-    Constructor Parameters:
-    device_rep (DeviceResources)
-    file_name (String) - filename for xdlrc file (.xdlrc extension will
-                         be appended).
-                         Default: device_resource_capnp.name
-    """
-
-    def __sort_tile_cols__(tile):
-        """
-        Helper function for sort.
-
-        NOT designed for use outside of being a key function for sort().
-        Helps sort() sort the tiles based on col number
-
-        NOTE: self is purposely not included as the first arguement.
-        """
-        return tile.col
-
-    def __init__(self, device_resource, fileName=''):
-        if type(device_resource) is DeviceResources:
-            # TODO test this feature
-            self.__dict__ = device_resource.__dict__.copy()
-        else:
-            super().__init__(device_resource)
-
-        self.tiles = []
-        tiles_by_row = [[]]
-        for tile in self.device_resource_capnp.tileList:
-            # Create a list of lists of tiles by row
-            if len(tiles_by_row) <= tile.row:
-                for i in range(tile.row - len(tiles_by_row)):
-                    tiles_by_row.append([])
-                tiles_by_row.append([tile])
-            else:
-                tiles_by_row[tile.row].append(tile)
-
-        # sort each row list by column and then attach to master tile list
-        for tile_row in tiles_by_row:
-            tile_row.sort(key=XDLRC.__sort_tile_cols__)
-            self.tiles += tile_row
-
-        self.generate_XDLRC(fileName)
 
     Direction_strs = ("Input", "Output", "Inout")
 
