@@ -36,7 +36,7 @@ class XDLRC(DeviceResources):
 
         self.tiles = []
         tiles_by_row = [[]]
-        for tile in self.device_resource_capnp.tileList:
+        for tile in raw_repr.tileList:
             # Create a list of lists of tiles by row
             if len(tiles_by_row) <= tile.row:
                 for i in range(tile.row - len(tiles_by_row)):
@@ -61,18 +61,22 @@ class XDLRC(DeviceResources):
             will be appended). Default: self.device_resource_capnp.name
         """
 
+        # "Pointer" to raw capnp device resource data (reduce typing)
+        raw_repr = self.device_resource_capnp
+
         if fileName == '':
-            fileName = self.device_resource_capnp.name
+            fileName = raw_repr.name
 
         fileName = fileName + '.xdlrc'
 
         xdlrc = open(fileName, "w+")
 
+        # TILES declaration
         num_rows = self.tiles[-1].row + 1
         num_cols = self.tiles[-1].col + 1
-
         xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
 
+        # TILE declaration
         for tile in self.tiles:
             tile_name = self.strs[tile.name]
             if (tile_name == 'LIOB33_SING_X0Y199'):
@@ -87,6 +91,7 @@ class XDLRC(DeviceResources):
                 num_pips = len(pips)
                 num_primitive_sites = len(tile.sites)
 
+                # PRIMITIVE_SITE declaration
                 for site in tile.sites:
                     site_name = self.strs[site.name]
                     site_t_info = self.site_name_to_site[
@@ -99,6 +104,7 @@ class XDLRC(DeviceResources):
                                 + f"{site_t_name} "
                                 + f"{len(site_t.site_pins.keys())}\n")
 
+                    # PINWIRE declaration
                     for idx, pin in enumerate(site_t.site_pins.items()):
                         pin_wire = self.get_site_pin(site, idx).wire_name
                         pin_name = pin[0]  # key value is pin_name
@@ -108,6 +114,7 @@ class XDLRC(DeviceResources):
                                     + f"{direction} {pin_wire})\n")
                     xdlrc.write(f"\t\t)\n")
 
+                # WIRE declaration
                 for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():  # noqa
                     wire_name = self.strs[idx]
                     try:
@@ -115,12 +122,13 @@ class XDLRC(DeviceResources):
                     except AssertionError as e:
                         num_wires -= 1
                         continue
-                    myNode = self.device_resource_capnp.nodes[node_idx]
+                    myNode = raw_repr.nodes[node_idx]
                     xdlrc.write(
                         f"\t\t(wire {wire_name} {len(myNode.wires) -1}\n")
 
+                    # CONN declaration
                     for w in myNode.wires:
-                        wire = self.device_resource_capnp.wires[w]
+                        wire = raw_repr.wires[w]
                         conn_tile = self.strs[wire.tile]
                         conn_wire = self.strs[wire.wire]
 
@@ -130,30 +138,66 @@ class XDLRC(DeviceResources):
 
                     xdlrc.write(f"\t\t)\n")
 
+                # PIP declaration
                 for p in pips:
                     xdlrc.write(
                         f"\t\t(pip {tile_name} {self.strs[wires[p.wire0]]} ->"
                         + f" {self.strs[wires[p.wire1]]})\n")
 
+                # TILE_SUMMARY declaration
                 xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
                 xdlrc.write(f"{num_primitive_sites} {num_wires} {num_pips})\n")
                 xdlrc.write(f"\t)\n")
                 return
 
+        # PRIMITIVE_DEFS declaration
+        # TODO calculate total # primitive defs
         xdlrc.write(f")\n (primitive_defs {''}\n")
-        for idx in range(len(self.device_resource_capnp.siteTypeList)):
-            site_t = self.get_site_type(idx)
 
+        # PRIMITIVE_DEF declaration
+        for idx in range(len(raw_repr.siteTypeList)):
+            site_t = self.get_site_type(idx)
+            site_t_raw = raw_repr.siteTypeList[site_t.site_type_index]
+            site_wires = site_t_raw.siteWires
+
+            # PINWIRE declaration
             for pin_name, pin in site_t.site_pins.items():
                 direction = pin[3].name.lower()
                 xdlrc.write(
                     f"\t\t(pinwire {pin_name} {pin_name} {direction})\n")
 
+            # ELEMENT declaration
             for bel in site_t.bels:
                 xdlrc.write(f"\t\t(element {bel.name} {len(bel.bel_pins)}\n")
                 for bel_pin in bel.bel_pins:
+                    # PIN declaration
                     bel_pin_index = site_t.bel_pin_index[bel_pin]
+                    bel_pin_name = bel_pin_index[1]
                     bel_info = site_t.bel_pins[bel_pin_index]
                     direction = bel_info[2].name.lower()
                     xdlrc.write(
-                        f"\t\t\t(pin {bel_pin_index[1]} {direction})\n")
+                        f"\t\t\t(pin {bel_pin_name} {direction})\n")
+
+                    # CONN declaration
+                    site_wire_index = bel_info[1]
+
+                    # TODO This fails ex ST: DSP48E1 SW: ALUMODE0 # noqa
+                    assert len(site_wires[site_wire_index].pins) == 2
+
+                    for bel_pin2 in site_wires[site_wire_index].pins:
+                        if bel_pin2[0] != bel.name:
+                            break
+
+                    bel2_name = bel_pin2[0]
+                    bel_pin2_name = bel_pin2[1]
+
+                    direction = bel_info[2]
+                    direction_str = ''
+                    if direction == Direction.Input:
+                        direction_str = '<=='
+                    elif direction == Direction.Output:
+                        direction_str = '==>'
+
+                    xdlrc.write(f"\t\t\t(conn {bel.name} {bel_pin_name} "
+                                + f"{direction_str} {bel2_name} "
+                                + f"{bel_pin2_name})\n")
