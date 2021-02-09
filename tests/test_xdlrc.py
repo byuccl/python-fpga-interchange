@@ -7,6 +7,9 @@ contained in XDLRC_KEY_WORD are currently supported (case-insensitive).
 If an unknown declaration is encountered, the line is skipped and a
 warning is printed.
 
+Note: CFG is recognized as a declaration, but not supported in XDLRC
+generation so these lines are skipped without warning or error.
+
 To be ran in the tests directory of the python-fpga-interchange project
 with the command:
     $python test_xdlrc.py -m interchange
@@ -18,10 +21,11 @@ import time
 from collections import namedtuple
 
 KeyWords = namedtuple(
-    'KeyWords', 'comment tiles tile wire conn summary pip site pinwire')
+    'KeyWords', 'comment tiles tile wire conn summary pip site pinwire prim_defs prim_def element cfg')  # noqa
 
 XDLRC_KEY_WORD = KeyWords('#', 'TILES', 'TILE', 'WIRE', 'CONN', 'TILE_SUMMARY',
-                          'PIP', 'PRIMITIVE_SITE', 'PINWIRE')
+                          'PIP', 'PRIMITIVE_SITE', 'PINWIRE', 'PRIMITIVE_DEFS',
+                          'PRIMITIVE_DEF', 'ELEMENT', 'CFG')
 
 # TODO change these paths so they are not hard coded
 TEST_XDLRC = 'xc7a100t.xdlrc'
@@ -78,14 +82,17 @@ def get_line(*argv):
             if not line:
                 continue
             line = line.upper().split()
-            if line[0] not in XDLRC_KEY_WORD:
+            key_word = line[0]
+            if key_word not in XDLRC_KEY_WORD:
                 if line[0] not in unknowns:
                     print(f"Warning: Unknown Key word {line[0]}. Ignoring line"
                           + f" {lines[f.name]}")
                     print(line)
                     unknowns.append(line[0])
                 continue
-            elif line[0][0] != XDLRC_KEY_WORD.comment:
+            elif (key_word[0] != XDLRC_KEY_WORD.comment and
+                  key_word != XDLRC_KEY_WORD.cfg):
+                # CFGs not currently supported
                 break
         ret.append(line)
     if len(ret) == 1:
