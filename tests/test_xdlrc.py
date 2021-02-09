@@ -196,7 +196,7 @@ def compare_xdlrc(file1, file2):
 def init():
     """
     Set up the environment for __main__.
-    But, also useful to run after an import for debugging/testing
+    Also useful to run after an import for debugging/testing
     """
     import sys
     import os
@@ -206,7 +206,7 @@ def init():
         os.path.join(os.getcwd(), os.path.expanduser(__file__))))
     sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR, PACKAGE_PARENT)))
 
-    from fpga_interchange.device_resources import XDLRC
+    from fpga_interchange.XDLRC import XDLRC
     from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
 
     device_schema = Interchange(SCHEMA_DIR).device_resources_schema.Device
