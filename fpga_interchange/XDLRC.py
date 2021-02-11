@@ -88,7 +88,7 @@ class XDLRC(DeviceResources):
 
         self.tiles = []
         tiles_by_row = [[]]
-        for tile in raw_repr.tileList:
+        for tile in self.device_resource_capnp.tileList:
             # Create a list of lists of tiles by row
             if len(tiles_by_row) <= tile.row:
                 for i in range(tile.row - len(tiles_by_row)):
@@ -241,6 +241,7 @@ class XDLRC(DeviceResources):
             # PIN declaration
             for pin_name, pin in site_t.site_pins.items():
                 direction = pin[3].name.lower()
+                # TODO make sure pin_name == wire_name
                 xdlrc.write(
                     f"\t\t(pin {pin_name} {pin_name} {direction})\n")
 
