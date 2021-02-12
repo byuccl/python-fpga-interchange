@@ -1,4 +1,5 @@
-from .device_resources import DeviceResources
+from .device_resources import DeviceResources, convert_direction
+from .logical_netlist import Direction
 
 
 class XDLRC(DeviceResources):
@@ -154,8 +155,7 @@ class XDLRC(DeviceResources):
             xdlrc.write(f"\t)\n")
 
         # PRIMITIVE_DEFS declaration
-        # TODO calculate total # primitive defs
-        xdlrc.write(f")\n (primitive_defs {''}\n")
+        xdlrc.write(f")\n (primitive_defs {len(raw_repr.siteTypeList)}\n")
 
         # PRIMITIVE_DEF declaration
         # Semantics to ensure primitive_defs are added alphabetically
@@ -164,17 +164,19 @@ class XDLRC(DeviceResources):
             site_t = self.get_site_type(idx)
             site_types[site_t.site_type] = site_t
 
-        site_type_names = list(site_types.keys()).sort()
+        site_type_names = list(site_types.keys())
+        site_type_names.sort()
 
         for i in site_type_names:
             site_t = site_types[i]
             site_t_raw = raw_repr.siteTypeList[site_t.site_type_index]
             site_wires = site_t_raw.siteWires
 
+            xdlrc.write(f"\t(primitive_def {site_t.site_type} "
+                        + f"{len(site_t.site_pins)} {len(site_t.bels)}")
             # PIN declaration
             for pin_name, pin in site_t.site_pins.items():
                 direction = pin[3].name.lower()
-                # TODO make sure pin_name == wire_name
                 xdlrc.write(
                     f"\t\t(pin {pin_name} {pin_name} {direction})\n")
 
@@ -192,12 +194,17 @@ class XDLRC(DeviceResources):
 
                     # CONN declaration
                     site_wire_index = bel_info[1]
-                    for bel_pin2 in site_wires[site_wire_index].pins:
-                        if bel_pin2[0] != bel.name:
-                            bel2_name = bel_pin2[0]
-                            bel_pin2_name = bel_pin2[1]
 
-                            direction = bel_info[2]
+                    if site_wire_index is None:
+                        # sometimes an element pin has no conn statements
+                        continue
+                    for pin_idx in site_wires[site_wire_index].pins:
+                        bel_pin2_raw = site_t_raw.belPins[pin_idx]
+                        bel2_name = self.strs[bel_pin2_raw.bel]
+                        if bel2_name != bel.name:
+                            bel_pin2_name = self.strs[bel_pin2_raw.name]
+
+                            direction = convert_direction(bel_pin2_raw.dir)
                             direction_str = ''
                             if direction == Direction.Input:
                                 direction_str = '<=='
