@@ -241,7 +241,6 @@ class XDLRC(DeviceResources):
             # PIN declaration
             for pin_name, pin in site_t.site_pins.items():
                 direction = pin[3].name.lower()
-                # TODO make sure pin_name == wire_name
                 xdlrc.write(
                     f"\t\t(pin {pin_name} {pin_name} {direction})\n")
 
