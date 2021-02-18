@@ -42,7 +42,7 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
 
 # TODO change these paths so they are not hard coded
 TEST_XDLRC = 'xc7a100t.xdlrc'
-CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
+CORRECT_XDLRC = '/home/reilly/BRAM_L_X6Y195.txt'  # '/home/reilly/xc7a100t.xdlrc'
 # CORRECT_XDLRC = '/home/reilly/partial.xdlrc'
 SCHEMA_DIR = "/home/reilly/RW/RapidWright/interchange"
 DEVICE_FILE = "/home/reilly/RW/RapidWright/xc7a100t.device"
@@ -285,30 +285,30 @@ def build_tile_db(myFile, tileName):
 
     tile = TileStruct(tileName, {}, {}, {})
     line = get_line(myFile)
-    while line and line[0] != XDLRC_KEY_WORD.summary:
-        if line[0] == XDLRC_KEY_WORD.wire:
+    while line and line[0] != XDLRC_KEY_WORD_KEYS.summary:
+        if line[0] == XDLRC_KEY_WORD_KEYS.wire:
             wire = line[1]
             tile.wires[wire] = []
             conns = tile.wires[wire]
 
             line = get_line(myFile)
-            while line and (line[0] == XDLRC_KEY_WORD.conn):
+            while line and (line[0] == XDLRC_KEY_WORD_KEYS.conn):
                 conns.append(tuple([line[1], line[2]]))
                 line = get_line(myFile)
 
-        elif line[0] == XDLRC_KEY_WORD.pip:
+        elif line[0] == XDLRC_KEY_WORD_KEYS.pip:
             if line[1] not in tile.pips.keys():
                 tile.pips[line[1]] = []
             tile.pips[line[1]].append(line[3])
             line = get_line(myFile)
 
-        elif line[0] == XDLRC_KEY_WORD.site:
+        elif line[0] == XDLRC_KEY_WORD_KEYS.site:
             sites_key = line[1] + ' ' + line[2]
             tile.sites[sites_key] = []
             pin_wires = tile.sites[sites_key]
 
             line = get_line(myFile)
-            while line and (line[0] == XDLRC_KEY_WORD.pinwire):
+            while line and (line[0] == XDLRC_KEY_WORD_KEYS.pinwire):
                 direction = Direction.convert(line[2])
                 pin_wires.append(PinWire(line[1], direction, line[3]))
                 line = get_line(myFile)
@@ -455,22 +455,22 @@ def build_prim_def_db(myFile, name):
     prim_def = PrimDef(name, [], {})
     line = get_line(myFile)
 
-    while line and (line[0] != XDLRC_KEY_WORD.prim_def):
-        if line[0] == XDLRC_KEY_WORD.pin:
+    while line and (line[0] != XDLRC_KEY_WORD_KEYS.prim_def):
+        if line[0] == XDLRC_KEY_WORD_KEYS.pin:
             prim_def.pins.append(PinWire(line[1], Direction.convert(line[2]),
                                          line[3]))
             line = get_line(myFile)
-        elif line[0] == XDLRC_KEY_WORD.element:
+        elif line[0] == XDLRC_KEY_WORD_KEYS.element:
             if line[2] != '0':  # make sure there is more than just cfg
                 prim_def.elements[line[1]] = Element(line[1], [], [])
                 element = prim_def.elements[line[1]]
                 line = get_line(myFile)
                 while True:
-                    if line[0] == XDLRC_KEY_WORD.pin:
+                    if line[0] == XDLRC_KEY_WORD_KEYS.pin:
                         element.pins.append(
                             PinWire(line[1], Direction.convert(line[2]), ''))
                         line = get_line(myFile)
-                    elif line[0] == XDLRC_KEY_WORD.conn:
+                    elif line[0] == XDLRC_KEY_WORD_KEYS.conn:
                         if line[3] == '==>':
                             element.conns.append(
                                 line[1], line[2], line[4], line[5])
@@ -505,13 +505,13 @@ def compare_xdlrc(file1, file2):
         global _errors
         _errors = 0
 
-        line1, line2 = get_line(f1, f2)
-        # check Tiles row_num col_num declaration
-        assert_equal(line1, line2)
+        # line1, line2 = get_line(f1, f2)
+        # # check Tiles row_num col_num declaration
+        # assert_equal(line1, line2)
 
         # Tile chekcs
         line1, line2 = get_line(f1, f2)
-        while line1 and line2 and (line1[0] != XDLRC_KEY_WORD.prim_defs):
+        while line1 and line2 and (line1[0] != XDLRC_KEY_WORD_KEYS.prim_defs):
             # Check Tile Header
             assert_equal(line1, line2)
 
@@ -580,16 +580,3 @@ if __name__ == "__main__":
     compare_xdlrc(TEST_XDLRC, CORRECT_XDLRC)
     finish = time.time() - start
     print(f"XDLRC compared in {finish} seconds")
-
-    # See what is not supported yet
-    # with open(CORRECT_XDLRC, 'r') as f:
-    #     while True:
-    #         line = get_line(f)
-    #         if line[0] == XDLRC_KEY_WORD.site:
-    #             print(lines[f.name])
-    #             print(line)
-    #             break
-    #     print('done')
-
-    #     site_name = myDevice.strs[tile.sites[0].name]
-    #     site = d.site_name_to_site[site_name]   # site is dict
