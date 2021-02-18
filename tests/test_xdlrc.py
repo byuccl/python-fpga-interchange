@@ -505,9 +505,9 @@ def compare_xdlrc(file1, file2):
         global _errors
         _errors = 0
 
-        # line1, line2 = get_line(f1, f2)
+        line1, line2 = get_line(f1, f2)
         # # check Tiles row_num col_num declaration
-        # assert_equal(line1, line2)
+        assert_equal(line1, line2)
 
         # Tile chekcs
         line1, line2 = get_line(f1, f2)
@@ -571,10 +571,10 @@ def init():
 
 if __name__ == "__main__":
 
-    start = time.time()
-    myDevice = init()
-    finish = time.time() - start
-    print(f"XDLRC generated in {finish} seconds")
+    # start = time.time()
+    # myDevice = init()
+    # finish = time.time() - start
+    # print(f"XDLRC generated in {finish} seconds")
 
     start = time.time()
     compare_xdlrc(TEST_XDLRC, CORRECT_XDLRC)
