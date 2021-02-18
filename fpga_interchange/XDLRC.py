@@ -62,7 +62,7 @@ class XDLRC(DeviceResources):
             will be appended). Default: self.device_resource_capnp.name
         """
 
-        # "Pointer" to raw capnp device resource data (reduce typing)
+        # "Pointer" to r capnp device resource data (reduce typing)
         raw_repr = self.device_resource_capnp
 
         if fileName == '':
@@ -75,13 +75,14 @@ class XDLRC(DeviceResources):
         # TILES declaration
         num_rows = self.tiles[-1].row + 1
         num_cols = self.tiles[-1].col + 1
-        xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
+        # xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
 
         # TILE declaration
-        for tile in self.tiles:
+        for tile in self.tiles:  # BRAM_L_X6Y195
             tile_name = self.strs[tile.name]
 
             tile_type = self.get_tile_type(tile.type)
+            tile_type_r = raw_repr.tileTypeList[tile_type.tile_type_index]
             wires = tile_type.wires
             pips = tile_type.pips
             xdlrc.write(f"\t(tile {tile.row} {tile.col} {tile_name} "
@@ -94,33 +95,31 @@ class XDLRC(DeviceResources):
             # PRIMITIVE_SITE declaration
             for site in tile.sites:
                 site_name = self.strs[site.name]
-                site_t_infos = self.site_name_to_site[
-                    site_name]
+                site_type_in_tile_type = tile_type_r.siteTypes[site.type]
+                site_type_r_idx = site_type_in_tile_type.primaryType
+                site_type_r = raw_repr.siteTypeList[site_type_r_idx]
+                site_t_name = self.strs[site_type_r.name]
+                site = self.site_name_to_site[site_name][site_t_name]
 
-                for site_t_name, site in site_t_infos.items():
-                    site_t = self.get_site_type(site.site_type_index)
-                    xdlrc.write(f"\t\t(primitive_site {site_name} "
-                                + f"{site_t_name} "
-                                + f"{len(site_t.site_pins.keys())}\n")
+                site_t = self.get_site_type(site.site_type_index)
+                xdlrc.write(f"\t\t(primitive_site {site_name} "
+                            + f"{site_t_name} "
+                            + f"{len(site_t.site_pins.keys())}\n")
 
-                    # PINWIRE declaration
-                    for idx, pin in enumerate(site_t.site_pins.items()):
-                        try:
-                            pin_wire = self.get_site_pin(site, idx).wire_name
-                        except IndexError as e:
-                            # TODO investigate
-                            if 'BRAM' not in tile_name:
-                                print("Error pin idx out of bounds.")
-                                print(f"tile_name {tile_name} Site {site}")
-                        pin_name = pin[0]  # key value is pin_name
-                        pin = pin[1]  # value is pin data
-                        direction = pin[3].name.lower()
-                        xdlrc.write(f"\t\t\t(pinwire {pin_name} "
-                                    + f"{direction} {pin_wire})\n")
-                    xdlrc.write(f"\t\t)\n")
+                # PINWIRE declaration
+                # site_pin to tile_wire list
+                site_to_tile = site_type_in_tile_type.primaryPinsToTileWires
+                for idx, pin in enumerate(site_type_r.pins):
+                    pin_name = self.strs[pin.name]
+                    tile_wire = self.strs[site_to_tile[idx]]
+                    pin = site_t.site_pins[pin_name]
+                    direction = pin[3].name.lower()
+                    xdlrc.write(f"\t\t\t(pinwire {pin_name} "
+                                + f"{direction} {tile_wire})\n")
+                xdlrc.write(f"\t\t)\n")
 
             # WIRE declaration
-            for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():  # noqa
+            for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():
                 wire_name = self.strs[idx]
                 try:
                     node_idx = self.node(tile_name, wire_name).node_index
@@ -129,7 +128,12 @@ class XDLRC(DeviceResources):
                     continue
                 myNode = raw_repr.nodes[node_idx]
                 xdlrc.write(
-                    f"\t\t(wire {wire_name} {len(myNode.wires) -1}\n")
+                    f"\t\t(wire {wire_name} {len(myNode.wires) -1}")
+                if len(myNode.wires) == 1:  # no CONNs
+                    xdlrc.write(')\n')
+                    continue
+                else:
+                    xdlrc.write('\n')
 
                 # CONN declaration
                 for w in myNode.wires:
@@ -169,8 +173,8 @@ class XDLRC(DeviceResources):
 
         for i in site_type_names:
             site_t = site_types[i]
-            site_t_raw = raw_repr.siteTypeList[site_t.site_type_index]
-            site_wires = site_t_raw.siteWires
+            site_t_r = raw_repr.siteTypeList[site_t.site_type_index]
+            site_wires = site_t_r.siteWires
 
             xdlrc.write(f"\t(primitive_def {site_t.site_type} "
                         + f"{len(site_t.site_pins)} {len(site_t.bels)}")
@@ -199,12 +203,12 @@ class XDLRC(DeviceResources):
                         # sometimes an element pin has no conn statements
                         continue
                     for pin_idx in site_wires[site_wire_index].pins:
-                        bel_pin2_raw = site_t_raw.belPins[pin_idx]
-                        bel2_name = self.strs[bel_pin2_raw.bel]
+                        bel_pin2_r = site_t_r.belPins[pin_idx]
+                        bel2_name = self.strs[bel_pin2_r.bel]
                         if bel2_name != bel.name:
-                            bel_pin2_name = self.strs[bel_pin2_raw.name]
+                            bel_pin2_name = self.strs[bel_pin2_r.name]
 
-                            direction = convert_direction(bel_pin2_raw.dir)
+                            direction = convert_direction(bel_pin2_r.dir)
                             direction_str = ''
                             if direction == Direction.Input:
                                 direction_str = '<=='
