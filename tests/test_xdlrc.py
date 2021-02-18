@@ -42,7 +42,7 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
 
 # TODO change these paths so they are not hard coded
 TEST_XDLRC = 'xc7a100t.xdlrc'
-CORRECT_XDLRC = '/home/reilly/BRAM_L_X6Y195.txt'  # '/home/reilly/xc7a100t.xdlrc'
+CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
 # CORRECT_XDLRC = '/home/reilly/partial.xdlrc'
 SCHEMA_DIR = "/home/reilly/RW/RapidWright/interchange"
 DEVICE_FILE = "/home/reilly/RW/RapidWright/xc7a100t.device"

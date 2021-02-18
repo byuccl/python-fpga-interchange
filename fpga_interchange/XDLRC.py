@@ -75,7 +75,7 @@ class XDLRC(DeviceResources):
         # TILES declaration
         num_rows = self.tiles[-1].row + 1
         num_cols = self.tiles[-1].col + 1
-        # xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
+        xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
 
         # TILE declaration
         for tile in self.tiles:  # BRAM_L_X6Y195
