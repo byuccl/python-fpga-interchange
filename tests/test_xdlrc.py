@@ -27,7 +27,7 @@ KeyWords = namedtuple(
 
 # Dictionary contains XDLRC declarations as keys and expected token length
 # as values
-XDLRC_KEY_WORD = {'#': 0, 'TILES': 3, 'TILE': 6, 'WIRE': 3, 'CONN': 3,
+XDLRC_KEY_WORD = {'#': 0, 'TILES': 3, 'TILE': 6, 'WIRE': 3, 'CONN': 6,
                   'TILE_SUMMARY': 6, 'PIP': 4, 'PRIMITIVE_SITE': 5,
                   'PINWIRE': 4, 'PRIMITIVE_DEFS': 2, 'PRIMITIVE_DEF': 3,
                   'ELEMENT': 3, 'CFG': 0, 'PIN': 4}
@@ -42,7 +42,7 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
 
 # TODO change these paths so they are not hard coded
 TEST_XDLRC = 'xc7a100t.xdlrc'
-CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
+CORRECT_XDLRC = '/home/reilly/primdef.txt'  # '/home/reilly/xc7a100t.xdlrc'
 # CORRECT_XDLRC = '/home/reilly/partial.xdlrc'
 SCHEMA_DIR = "/home/reilly/RW/RapidWright/interchange"
 DEVICE_FILE = "/home/reilly/RW/RapidWright/xc7a100t.device"
@@ -378,7 +378,7 @@ class Element(namedtuple('Element', 'name pins conns')):
         return True
 
 
-class PrimDef(namedtuple('PrimDef', 'name pin elements')):
+class PrimDef(namedtuple('PrimDef', 'name pins elements')):
     """
     Lightweight class for holding XDLRC primitive def information.
 
@@ -406,7 +406,7 @@ class PrimDef(namedtuple('PrimDef', 'name pin elements')):
 
         if self.name != other.name:
             print("Fatal Error: Primitive Def name mismatch")
-            print(f"Name1: {self.name} Name2: {self.name2}")
+            print(f"Name1: {self.name} Name2: {other.name}")
             return False
 
         global _errors
@@ -465,7 +465,8 @@ def build_prim_def_db(myFile, name):
                 prim_def.elements[line[1]] = Element(line[1], [], [])
                 element = prim_def.elements[line[1]]
                 line = get_line(myFile)
-                while True:
+
+                while line:
                     if line[0] == XDLRC_KEY_WORD_KEYS.pin:
                         element.pins.append(
                             PinWire(line[1], Direction.convert(line[2]), ''))
@@ -473,10 +474,10 @@ def build_prim_def_db(myFile, name):
                     elif line[0] == XDLRC_KEY_WORD_KEYS.conn:
                         if line[3] == '==>':
                             element.conns.append(
-                                line[1], line[2], line[4], line[5])
+                                Conn(line[1], line[2], line[4], line[5]))
                         else:
                             element.conns.append(
-                                line[4], line[5], line[1], line[2])
+                                Conn(line[4], line[5], line[1], line[2]))
                         line = get_line(myFile)
                     else:
                         break
@@ -535,6 +536,8 @@ def compare_xdlrc(file1, file2):
             # Elements w/ only CFG bits are not supported, so comparing
             # element count will likely fail. So element cnt is dropped.
             line1 = line1[:3]
+            while line2[1] != line1[1]:  # skip PrimDefs that are not supported
+                line2 = get_line(f2)
             line2 = line2[:3]
 
             assert_equal(line1, line2)
@@ -553,7 +556,6 @@ def init():
     Set up the environment for __main__.
     Also useful to run after an import for debugging/testing
     """
-    import sys
     import os
 
     PACKAGE_PARENT = '..'
