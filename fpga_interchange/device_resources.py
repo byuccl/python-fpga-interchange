@@ -902,63 +902,9 @@ class DeviceResources():
 
                     for bel in site_type.bels:
                         yield tile_name, site_name, tile.tile_type, \
-                            site.site_type_name, bel.name
+                                site.site_type_name, bel.name
 
-    def generate_XDLRC(self, fileName=''):
-        """
-        UNDER CONSTRUCTION
-        Generate an XDLRC file based on the DeviceResources Device.
-
-        fileName (String) - filename for xdlrc file (.xdlrc extension
-            will be appended). Default: self.device_resource_capnp.name
-        """
-
-        if fileName == '':
-            fileName = self.device_resource_capnp.name
-
-        fileName = fileName + '.xdlrc'
-
-        xdlrc = open(fileName, "w+")
-
-        num_rows = self.tiles[-1].row + 1
-        num_cols = self.tiles[-1].col + 1
-
-        xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
-
-        for tile in self.tiles:
-            tile_name = self.strs[tile.name]
-            tile_type = self.get_tile_type(tile.type)
-            xdlrc.write(f"\t(tile {tile.row} {tile.col} {tile_name} "
-                        + f"{tile_type.name} {len(tile.sites)}\n")
-
-            num_wires = len(tile_type.string_index_to_wire_id_in_tile_type)
-            num_pips = 0
-            num_primitive_sites = 0
-
-            for idx in tile_type.string_index_to_wire_id_in_tile_type.keys():
-                wire_name = self.strs[idx]
-                try:
-                    node_idx = self.node(tile_name, wire_name).node_index
-                except AssertionError as e:
-                    num_wires -= 1
-                    continue
-                myNode = self.device_resource_capnp.nodes[node_idx]
-                xdlrc.write(
-                    f"\t\t(wire {wire_name} {len(myNode.wires) -1}\n")
-
-                for w in myNode.wires:
-                    wire = self.device_resource_capnp.wires[w]
-                    conn_tile = self.strs[wire.tile]
-                    conn_wire = self.strs[wire.wire]
-
-                    if conn_wire != wire_name:
-                        xdlrc.write(
-                            f"\t\t\t(conn {conn_tile} {conn_wire})\n")
-
-                xdlrc.write(f"\t\t)\n")
-
-            xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
-            xdlrc.write(f"{num_primitive_sites} {num_wires} {num_pips})\n")
-            xdlrc.write(f"\t)\n")
-            if tile_name == "T_TERM_INT_X4Y208":
-                break
+    def get_primitive_library(self):
+        from fpga_interchange.interchange_capnp import to_logical_netlist
+        return to_logical_netlist(self.device_resource_capnp.primLibs,
+                                  self.strs)
