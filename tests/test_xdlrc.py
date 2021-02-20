@@ -42,10 +42,10 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
 
 # TODO change these paths so they are not hard coded
 TEST_XDLRC = 'xc7a100t.xdlrc'
-CORRECT_XDLRC = '/home/reilly/primdef.txt'  # '/home/reilly/xc7a100t.xdlrc'
+CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
 # CORRECT_XDLRC = '/home/reilly/partial.xdlrc'
-SCHEMA_DIR = "/home/reilly/RW/RapidWright/interchange"
-DEVICE_FILE = "/home/reilly/RW/RapidWright/xc7a100t.device"
+SCHEMA_DIR = "/home/reilly/RapidWright/interchange"
+DEVICE_FILE = "/home/reilly/xc7a100t.device"
 
 _errors = 0
 unknowns = []
@@ -315,7 +315,7 @@ def build_tile_db(myFile, tileName):
         else:
             print("Error: build_tile_db() hit default branch")
             print("This should not happen if XDLRC files are equal")
-            print(f"Line {lines[f.name]}:")
+            print(f"Line {myFile.line}:")
             print(line)
             sys.exit()
 
@@ -572,10 +572,10 @@ def init():
 
 if __name__ == "__main__":
 
-    # start = time.time()
-    # myDevice = init()
-    # finish = time.time() - start
-    # print(f"XDLRC generated in {finish} seconds")
+    start = time.time()
+    myDevice = init()
+    finish = time.time() - start
+    print(f"XDLRC generated in {finish} seconds")
 
     start = time.time()
     compare_xdlrc(TEST_XDLRC, CORRECT_XDLRC)

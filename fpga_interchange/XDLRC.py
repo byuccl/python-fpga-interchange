@@ -78,7 +78,7 @@ class XDLRC(DeviceResources):
         xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
 
         # TILE declaration
-        for tile in self.tiles:  # BRAM_L_X6Y195
+        for tile in self.tiles:
             tile_name = self.strs[tile.name]
 
             tile_type = self.get_tile_type(tile.type)
@@ -127,6 +127,7 @@ class XDLRC(DeviceResources):
                     num_wires -= 1
                     continue
                 myNode = raw_repr.nodes[node_idx]
+
                 xdlrc.write(
                     f"\t\t(wire {wire_name} {len(myNode.wires) -1}")
                 if len(myNode.wires) == 1:  # no CONNs
@@ -177,7 +178,7 @@ class XDLRC(DeviceResources):
             site_wires = site_t_r.siteWires
 
             xdlrc.write(f"\t(primitive_def {site_t.site_type} "
-                        + f"{len(site_t.site_pins)} {len(site_t.bels)}")
+                        + f"{len(site_t.site_pins)} {len(site_t.bels)}\n")
             # PIN declaration
             for pin_name, pin in site_t.site_pins.items():
                 direction = pin[3].name.lower()
