@@ -88,9 +88,9 @@ class XDLRC(DeviceResources):
             xdlrc.write(f"\t(tile {tile.row} {tile.col} {tile_name} "
                         + f"{tile_type.name} {len(tile.sites)}\n")
 
-            num_wires = len(wires)
+            num_wires = 0
             num_pips = len(pips)
-            num_primitive_sites = len(tile.sites)
+            num_pinwires = 0
 
             # PRIMITIVE_SITE declaration
             for site in tile.sites:
@@ -114,6 +114,7 @@ class XDLRC(DeviceResources):
                     tile_wire = self.strs[site_to_tile[idx]]
                     pin = site_t.site_pins[pin_name]
                     direction = pin[3].name.lower()
+                    num_pinwires += 1
                     xdlrc.write(f"\t\t\t(pinwire {pin_name} "
                                 + f"{direction} {tile_wire})\n")
                 xdlrc.write(f"\t\t)\n")
@@ -124,10 +125,10 @@ class XDLRC(DeviceResources):
                 try:
                     node_idx = self.node(tile_name, wire_name).node_index
                 except AssertionError as e:
-                    num_wires -= 1
                     continue
                 myNode = raw_repr.nodes[node_idx]
 
+                num_wires += 1
                 xdlrc.write(
                     f"\t\t(wire {wire_name} {len(myNode.wires) -1}")
                 if len(myNode.wires) == 1:  # no CONNs
@@ -156,7 +157,7 @@ class XDLRC(DeviceResources):
 
             # TILE_SUMMARY declaration
             xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
-            xdlrc.write(f"{num_primitive_sites} {num_wires} {num_pips})\n")
+            xdlrc.write(f"{num_pinwires} {num_wires} {num_pips})\n")
             xdlrc.write(f"\t)\n")
 
         # PRIMITIVE_DEFS declaration
