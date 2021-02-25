@@ -32,6 +32,8 @@ XDLRC_KEY_WORD = {'#': 0, 'TILES': 3, 'TILE': 6, 'WIRE': 3, 'CONN': 6,
                   'PINWIRE': 4, 'PRIMITIVE_DEFS': 2, 'PRIMITIVE_DEF': 3,
                   'ELEMENT': 3, 'CFG': 0, 'PIN': 4}
 
+XDLRC_UNSUPPORTED_WORDS = ['UNBONDED']
+
 XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
                                wire='WIRE', conn='CONN',
                                summary='TILE_SUMMARY', pip='PIP',
@@ -44,11 +46,15 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
 TEST_XDLRC = 'xc7a100t.xdlrc'
 CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
 # CORRECT_XDLRC = '/home/reilly/partial.xdlrc'
-SCHEMA_DIR = "/home/reilly/RapidWright/interchange"
+SCHEMA_DIR = "/home/reilly/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
 DEVICE_FILE = "/home/reilly/xc7a100t.device"
 
 _errors = 0
 unknowns = []
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 
 def get_line(*argv):
@@ -123,7 +129,7 @@ def assert_equal(obj1, obj2):
     except AssertionError as e:
         global _errors
         _errors += 1
-        print(f"AssertionError caught.\nObj1:\n{obj1}\n\nObj2:\n{obj2}\n\n")
+        eprint(f"AssertionError caught.\nObj1:\n{obj1}\n\nObj2:\n{obj2}\n\n")
         return False
     return True
 
@@ -174,7 +180,8 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
     """
     Lightweight class for holding XDLRC tile information.
 
-    __eq__() is overridden for accurate comparison
+    __eq__() is overridden for accurate comparison.  It is important to
+    note that it assumes that "other" is correct.
 
     Members:
         name  (str)  - Tile name
@@ -190,6 +197,7 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
         """
         Check two objects for equality.
 
+        Assumes other is always correct.
         Fails immediately upon type mismatch.
         Fails immediately if tile names differ, otherwise does NOT fail
         immediately upon equality violation.  Will check all elements
@@ -203,8 +211,8 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
             return False
 
         if self.name != other.name:
-            print("Fatal Error: Tile names do not match. Abort compare.")
-            print(f"Name1: {self.name} Name2: {other.name}\n\n")
+            eprint("Fatal Error: Tile names do not match. Abort compare.")
+            eprint(f"Name1: {self.name} Name2: {other.name}\n\n")
             return False
 
         # compare wires
@@ -214,7 +222,10 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
         for wire in uncommon_wires:
             _errors += 1
-            print(f"Tile: {self.name} Wire {wire} missing.")
+            if wire in keys[0]:
+                eprint(f"Tile: {self.name} Extra Wire {wire}")
+            else:
+                eprint(f"Tile: {self.name} Missing Wire {wire}")
 
         for wire in common_wires:
             conns = self.wires[wire]
@@ -225,7 +236,7 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
             if conns != other_conns:
                 _errors += 1
-                print(f"Tile: {self.name} Wire conns mismatch for {wire}")
+                eprint(f"Tile: {self.name} Wire conns mismatch for {wire}")
 
         # compare pips
         keys = [set(self.pips.keys()), set(other.pips.keys())]
@@ -234,7 +245,10 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
         for wire_in in uncommon_pips:
             _errors += 1
-            print(f"Tile: {self.name} Pip {wire_in} missing.")
+            if wire_in in keys[0]:
+                eprint(f"Tile: {self.name} Extra Pip {wire_in}")
+            else:
+                eprint(f"Tile: {self.name} Missing Pip {wire_in}")
 
         for wire_in in common_pips:
             wire_outs = self.pips[wire_in]
@@ -245,8 +259,8 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
             if wire_outs != other_wire_outs:
                 _errors += 1
-                print(f"Tile: {self.name} "
-                      + f"Pip connection mismatch for {wire_in}")
+                eprint(f"Tile: {self.name} "
+                       + f"Pip connection mismatch for {wire_in}")
 
         # compare primitive sites
         keys = [set(self.sites.keys()), set(other.sites.keys())]
@@ -255,7 +269,10 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
         for site in uncommon_sites:
             _errors += 1
-            print(f"Tile: {self.name} Site missing {site}")
+            if site in keys[0]:
+                eprint(f"Tile: {self.name} Extra Site {site}")
+            else:
+                eprint(f"Tile: {self.name} Missing Site {site}")
 
         for site in common_sites:
             pinwires = set(self.sites[site])
@@ -263,7 +280,7 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
             for pw in pinwires.symmetric_difference(other_pinwires):
                 _errors += 1
-                print(f"Tile: {self.name} PinWire mismatch for {pw}")
+                eprint(f"Tile: {self.name} PinWire mismatch for {pw}")
 
         return tmp_err == _errors
 
@@ -287,6 +304,7 @@ def build_tile_db(myFile, tileName):
     line = get_line(myFile)
     while line and line[0] != XDLRC_KEY_WORD_KEYS.summary:
         if line[0] == XDLRC_KEY_WORD_KEYS.wire:
+
             wire = line[1]
             tile.wires[wire] = []
             conns = tile.wires[wire]
@@ -303,6 +321,9 @@ def build_tile_db(myFile, tileName):
             line = get_line(myFile)
 
         elif line[0] == XDLRC_KEY_WORD_KEYS.site:
+            if line[3].upper() == XDLRC_UNSUPPORTED_WORDS[0]:
+                line.remove(line[3])
+
             sites_key = line[1] + ' ' + line[2]
             tile.sites[sites_key] = []
             pin_wires = tile.sites[sites_key]
@@ -313,10 +334,10 @@ def build_tile_db(myFile, tileName):
                 pin_wires.append(PinWire(line[1], direction, line[3]))
                 line = get_line(myFile)
         else:
-            print("Error: build_tile_db() hit default branch")
-            print("This should not happen if XDLRC files are equal")
-            print(f"Line {myFile.line}:")
-            print(line)
+            eprint("Error: build_tile_db() hit default branch")
+            eprint("This should not happen if XDLRC files are equal")
+            eprint(f"Line {myFile.line}:")
+            eprint(line)
             sys.exit()
 
     return (tile, line)
@@ -382,11 +403,13 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
     """
     Lightweight class for holding XDLRC primitive def information.
 
-    __eq__() is overridden for accurate comparison.
+    __eq__() is overridden for accurate comparison.  It is important to
+    note that it is assumed that the "other" operand is correct.
 
     Members:
         name     (str)  - Name of Primitive Def
-        pins     (list) - List of PinWires
+        pins     (dict) - Key: PinWire name (str)
+                          Value: PinWire
         elements (dict) - Key: Element name (str)
                           Value: Element details (Element)
     """
@@ -395,6 +418,7 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
         """
         Check two objects for equality.
 
+        Assumes other is always correct.
         Fails immediately upon type mismatch.
         Fails immediately if PrimDef names differ, otherwise does NOT
         fail immediately upon equality violation.  Will check all
@@ -405,34 +429,44 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
             return False
 
         if self.name != other.name:
-            print("Fatal Error: Primitive Def name mismatch")
-            print(f"Name1: {self.name} Name2: {other.name}")
+            eprint("Fatal Error: Primitive Def name mismatch")
+            eprint(f"Name1: {self.name} Name2: {other.name}")
             return False
 
         global _errors
         tmp_err = _errors
 
         # Check pins
-        pins = set(self.pins)
-        other_pins = set(other.pins)
+        pins = set(self.pins.keys())
+        other_pins = set(other.pins.keys())
 
         for pin in pins.symmetric_difference(other_pins):
             _errors += 1
-            print(f"Prim_Def: {self.name} Pin Mismatch {pin}")
+            if pin not in pins:
+                eprint(f"Prim_Def: {self.name} Extra Pin {self.pins[pin]}")
+            else:
+                eprint(f"Prim_Def: {self.name} Missing Pin {other.pins[pin]}")
 
+        for pin in pins.intersection(other_pins):
+            if self.pins[pin] != other.pins[pin]:
+                eprint(f"Prim_Def: {self.name} Pin Mismatch {self.pins[pin]} "
+                       + f"{other.pins[pin]}")
         # Check elements
         keys = set(self.elements.keys())
         other_keys = set(other.elements.keys())
 
         for key in keys.symmetric_difference(other_keys):
             _errors += 1
-            print(f"Prim_Def {self.name} Element Missing {key}")
+            if key in self.elements.keys():
+                eprint(f"Prim_Def {self.name} Extra Element {key}")
+            else:
+                eprint(f"Prim_Def {self.name} Missing Element {key}")
 
         for key in keys.intersection(other_keys):
             if self.elements[key] != other.elements[key]:
                 _errors += 1
-                print(f"Prim_Def {self.name} Element Mismatch "
-                      + f"{self.elements[key]} {other.elements[key]}")
+                eprint(f"Prim_Def {self.name} Element Mismatch "
+                       + f"{self.elements[key]} {other.elements[key]}")
 
         return tmp_err == _errors
 
@@ -452,13 +486,14 @@ def build_prim_def_db(myFile, name):
                                 contents of the last line parsed (empty
                                 for EOF or next primitive_def)
     """
-    prim_def = PrimDef(name, [], {})
+    prim_def = PrimDef(name, {}, {})
     line = get_line(myFile)
 
     while line and (line[0] != XDLRC_KEY_WORD_KEYS.prim_def):
         if line[0] == XDLRC_KEY_WORD_KEYS.pin:
-            prim_def.pins.append(PinWire(line[1], Direction.convert(line[2]),
-                                         line[3]))
+            prim_def.pins[line[1]] = PinWire(line[1],
+                                             Direction.convert(line[2]),
+                                             line[3])
             line = get_line(myFile)
         elif line[0] == XDLRC_KEY_WORD_KEYS.element:
             if line[2] != '0':  # make sure there is more than just cfg
@@ -484,7 +519,7 @@ def build_prim_def_db(myFile, name):
             else:
                 line = get_line(myFile)
         else:
-            print("Error: build_prim_def_db hit default branch")
+            eprint("Error: build_prim_def_db hit default branch")
             line = get_line(myFile)
 
     return (prim_def, line)
@@ -506,7 +541,7 @@ def compare_xdlrc(file1, file2):
         _errors = 0
 
         line1, line2 = get_line(f1, f2)
-        # # check Tiles row_num col_num declaration
+        # check Tiles row_num col_num declaration
         assert_equal(line1, line2)
 
         # Tile chekcs
@@ -547,6 +582,7 @@ def compare_xdlrc(file1, file2):
             # __eq__ is overridden so this actually does stuff
             prim_def1 == prim_def2
 
+    eprint(f"Done comparing XDLRC files. Errors: {_errors}")
     print(f"Done comparing XDLRC files. Errors: {_errors}")
 
 
@@ -567,7 +603,7 @@ def init():
 
     device_schema = Interchange(SCHEMA_DIR).device_resources_schema.Device
     return XDLRC(read_capnp_file(device_schema, DEVICE_FILE),
-                 TEST_XDLRC.replace(".xdlrc", ''))
+                 TEST_XDLRC.replace('.xdlrc', ''))
 
 
 if __name__ == "__main__":
