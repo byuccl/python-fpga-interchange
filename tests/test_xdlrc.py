@@ -15,15 +15,23 @@ with the command:
     $python test_xdlrc.py -m interchange
 """
 
+from collections import namedtuple
+import debugpy
 import enum
 import os
 import sys
-import debugpy
 import time
-from collections import namedtuple
 
 KeyWords = namedtuple(
     'KeyWords', 'comment tiles tile wire conn summary pip site pinwire prim_defs prim_def element cfg pin')  # noqa
+
+
+def myFunc():
+    return
+
+
+KeyWords.myFunc = myFunc
+
 
 # Dictionary contains XDLRC declarations as keys and expected token length
 # as values
@@ -42,19 +50,36 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
                                prim_def='PRIMITIVE_DEF', element='ELEMENT',
                                cfg='CFG', pin='PIN')
 
-# TODO change these paths so they are not hard coded
 TEST_XDLRC = 'xc7a100t.xdlrc'
 CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
-# CORRECT_XDLRC = '/home/reilly/partial.xdlrc'
+# TODO: make these paths not hard-coded
 SCHEMA_DIR = "/home/reilly/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
 DEVICE_FILE = "/home/reilly/xc7a100t.device"
 
+global _errors
 _errors = 0
 unknowns = []
 
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
+
+
+def file_init(*argv):
+    """
+    Add line counting and get_line storage to file objects.
+
+    Adds two members to file:
+        line_num (int)  - Current line number
+        line     (list) - Output of get_line()
+
+    Note: get_line is called to initialize line.
+    """
+
+    for f in argv:
+        f.line_num = 0
+        f.line = []
+    get_line(*argv)
 
 
 def get_line(*argv):
@@ -67,16 +92,13 @@ def get_line(*argv):
     dict that keeps track of line numbers for each file. Unknowns is a
     list of unrecognized XDLRC key words.
 
+    Updates f.line_num to contain current line number.
+    Updates f.line to contain the result
+
     Parameters:
         Any number of (XDLRC) file objects.
-
-    Return Values:
-        [] (list) - A list of words in the next valid line.  If multiple
-        files are provided as input, returns a list of lists.  If EOF is
-        reached then an empty list is returned.
     """
 
-    ret = []
     for f in argv:
         line = []
         while True:
@@ -84,13 +106,12 @@ def get_line(*argv):
             if not line:
                 # EOF is reached in this file. end of parse
                 print(f"file reached EOF\n\n")
-                print(unknowns)
+                if unknowns:
+                    print(unknowns)
                 break
 
             # keep track of line numbers
-            if "line" not in dir(f):
-                f.line = 0
-            f.line += 1
+            f.line_num += 1
 
             line = line.strip("()\n\t ")
             if not line:
@@ -100,7 +121,7 @@ def get_line(*argv):
             if key_word not in XDLRC_KEY_WORD_KEYS:
                 if line[0] not in unknowns:
                     print(f"Warning: Unknown Key word {line[0]}. Ignoring line"
-                          + f" {f.line}")
+                          + f" {f.line_num}")
                     print(line)
                     unknowns.append(line[0])
                 continue
@@ -111,11 +132,10 @@ def get_line(*argv):
                     line += ['BLANK'] * XDLRC_KEY_WORD[line[0]]
                 break
 
-        ret.append(line)
-    if len(ret) == 1:
-        return ret[0]
-    else:
-        return ret
+        # f.line is updated specifically in this way (NOT with =) to
+        # support shallow copies of f.line correctly being updated
+        f.line.clear()
+        f.line.extend(line)
 
 
 def assert_equal(obj1, obj2):
@@ -233,7 +253,7 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
             conns.sort()
             other_conns.sort()
-
+            debugpy.breakpoint()
             if conns != other_conns:
                 _errors += 1
                 eprint(f"Tile: {self.name} Wire conns mismatch for {wire}")
@@ -285,62 +305,64 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
         return tmp_err == _errors
 
 
-def build_tile_db(myFile, tileName):
+def build_tile_db(f, tileName):
     """
-    Build a TileStruct of a tile by scanning XDLRC myFile.
+    Build a TileStruct of a tile by scanning XDLRC f.
 
     Breaks on tile_summary or on EOF.
     Parameters:
-        myFile (file object) - file to scan for tile information
+        f (file object) - file to scan for tile information
 
     Returns:
-        (tile, last_line) - Tuple of TileStruct representing the tile
-                            and a list containing the contents of the
-                            last line parsed (empty for EOF or with
-                            tile_summary)
+        tile - TileStruct representing the tile
     """
 
     tile = TileStruct(tileName, {}, {}, {})
-    line = get_line(myFile)
-    while line and line[0] != XDLRC_KEY_WORD_KEYS.summary:
-        if line[0] == XDLRC_KEY_WORD_KEYS.wire:
+    get_line(f)
 
-            wire = line[1]
+    while f.line and f.line[0] != XDLRC_KEY_WORD_KEYS.summary:
+        if f.line[0] == XDLRC_KEY_WORD_KEYS.wire:
+
+            wire = f.line[1]
             tile.wires[wire] = []
             conns = tile.wires[wire]
 
-            line = get_line(myFile)
-            while line and (line[0] == XDLRC_KEY_WORD_KEYS.conn):
-                conns.append(tuple([line[1], line[2]]))
-                line = get_line(myFile)
+            get_line(f)
+            while f.line and (f.line[0] == XDLRC_KEY_WORD_KEYS.conn):
+                conns.append(tuple([f.line[1], f.line[2]]))
+                get_line(f)
 
-        elif line[0] == XDLRC_KEY_WORD_KEYS.pip:
-            if line[1] not in tile.pips.keys():
-                tile.pips[line[1]] = []
-            tile.pips[line[1]].append(line[3])
-            line = get_line(myFile)
+        elif f.line[0] == XDLRC_KEY_WORD_KEYS.pip:
+            if f.line[1] not in tile.pips.keys():
+                tile.pips[f.line[1]] = []
+            tile.pips[f.line[1]].append(f.line[3])
+            get_line(f)
 
-        elif line[0] == XDLRC_KEY_WORD_KEYS.site:
-            if line[3].upper() == XDLRC_UNSUPPORTED_WORDS[0]:
-                line.remove(line[3])
+        elif f.line[0] == XDLRC_KEY_WORD_KEYS.site:
+            # TODO print message to stderr
+            if f.line[3].upper() == XDLRC_UNSUPPORTED_WORDS[0]:
+                f.line.remove(f.line[3])
 
-            sites_key = line[1] + ' ' + line[2]
+            sites_key = f.line[1] + ' ' + f.line[2]
             tile.sites[sites_key] = []
             pin_wires = tile.sites[sites_key]
 
-            line = get_line(myFile)
-            while line and (line[0] == XDLRC_KEY_WORD_KEYS.pinwire):
-                direction = Direction.convert(line[2])
-                pin_wires.append(PinWire(line[1], direction, line[3]))
-                line = get_line(myFile)
+            get_line(f)
+            while (f.line and
+                   (f.line[0] == XDLRC_KEY_WORD_KEYS.pinwire)):
+
+                direction = Direction.convert(f.line[2])
+                pin_wires.append(
+                    PinWire(f.line[1], direction, f.line[3]))
+                get_line(f)
         else:
             eprint("Error: build_tile_db() hit default branch")
             eprint("This should not happen if XDLRC files are equal")
-            eprint(f"Line {myFile.line}:")
-            eprint(line)
+            eprint(f"Line {f.line_num}:")
+            eprint(f.line)
             sys.exit()
 
-    return (tile, line)
+    return tile
 
 
 class Conn(namedtuple('Conn', 'bel1 belpin1 bel2 belpin2')):
@@ -471,126 +493,151 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
         return tmp_err == _errors
 
 
-def build_prim_def_db(myFile, name):
+def build_prim_def_db(f, name):
     """
-    Build a PrimDef by scanning myFile.
+    Build a PrimDef by scanning f.
 
     Breaks on EOF or new Primitive_Def declaration.
 
     Parameters:
-        myFile (file object) - file to scan for tile information
+        f (file object) - file to scan for tile information
 
     Returns:
-        (prim_def, last_line) - Tuple of PrimDef representing the
-                                primitive_def and a list containing the
-                                contents of the last line parsed (empty
-                                for EOF or next primitive_def)
+        prim_def - PrimDef object representing the primitive_def.
     """
     prim_def = PrimDef(name, {}, {})
-    line = get_line(myFile)
+    get_line(f)
 
-    while line and (line[0] != XDLRC_KEY_WORD_KEYS.prim_def):
-        if line[0] == XDLRC_KEY_WORD_KEYS.pin:
-            prim_def.pins[line[1]] = PinWire(line[1],
-                                             Direction.convert(line[2]),
-                                             line[3])
-            line = get_line(myFile)
-        elif line[0] == XDLRC_KEY_WORD_KEYS.element:
-            if line[2] != '0':  # make sure there is more than just cfg
-                prim_def.elements[line[1]] = Element(line[1], [], [])
-                element = prim_def.elements[line[1]]
-                line = get_line(myFile)
+    while f.line and (f.line[0] != XDLRC_KEY_WORD_KEYS.prim_def):
+        if f.line[0] == XDLRC_KEY_WORD_KEYS.pin:
+            pin_wire = PinWire(f.line[1], Direction.convert(f.line[2]),
+                               f.line[3])
+            prim_def.pins[f.line[1]] = pin_wire
+            get_line(f)
+        elif f.line[0] == XDLRC_KEY_WORD_KEYS.element:
+            if f.line[2] != '0':  # make sure there is more than just cfg
+                element = Element(f.line[1], [], [])
+                prim_def.elements[f.line[1]] = element
+                element = prim_def.elements[f.line[1]]
+                get_line(f)
 
-                while line:
-                    if line[0] == XDLRC_KEY_WORD_KEYS.pin:
+                while f.line:
+                    if f.line[0] == XDLRC_KEY_WORD_KEYS.pin:
                         element.pins.append(
-                            PinWire(line[1], Direction.convert(line[2]), ''))
-                        line = get_line(myFile)
-                    elif line[0] == XDLRC_KEY_WORD_KEYS.conn:
-                        if line[3] == '==>':
-                            element.conns.append(
-                                Conn(line[1], line[2], line[4], line[5]))
+                            PinWire(f.line[1],
+                                    Direction.convert(f.line[2]), ''))
+                        get_line(f)
+                    elif f.line[0] == XDLRC_KEY_WORD_KEYS.conn:
+                        if f.line[3] == '==>':
+                            element.conns.append(Conn(f.line[1], f.line[2],
+                                                      f.line[4], f.line[5]))
                         else:
-                            element.conns.append(
-                                Conn(line[4], line[5], line[1], line[2]))
-                        line = get_line(myFile)
+                            element.conns.append(Conn(f.line[4], f.line[5],
+                                                      f.line[1], f.line[2]))
+                        get_line(f)
                     else:
                         break
             else:
-                line = get_line(myFile)
+                get_line(f)
         else:
             eprint("Error: build_prim_def_db hit default branch")
-            line = get_line(myFile)
+            get_line(f)
 
-    return (prim_def, line)
+    return prim_def
 
 
-def compare_xdlrc(file1, file2):
+def compare_tile(f1, f2):
     """
-    Compare two xdlrc files for equality.
+    Parse and compare a single tile.
 
     Tiles must be listed in the same order. Primitive Def headers must
     be in the same order.  Everything else can be out of order.
     Assumes that one of the xdlrc files has been generated
     correctly and the other file is being checked against it for
     correctness. 
+    Assumes file_init() has been executed for each file parameter.
     """
-    with open(file1, "r") as f1, open(file2, "r") as f2:
-        line1 = [None]
-        line2 = [None]
-        global _errors
-        _errors = 0
 
-        line1, line2 = get_line(f1, f2)
-        # check Tiles row_num col_num declaration
-        assert_equal(line1, line2)
+    # Check Tile Header
+    assert_equal(f1.line, f2.line)
 
-        # Tile chekcs
-        line1, line2 = get_line(f1, f2)
-        while line1 and line2 and (line1[0] != XDLRC_KEY_WORD_KEYS.prim_defs):
-            # Check Tile Header
-            assert_equal(line1, line2)
+    tile1 = build_tile_db(f1, f1.line[3])
+    tile2 = build_tile_db(f2, f2.line[3])
 
-            tile1, line1 = build_tile_db(f1, line1[3])
-            tile2, line2 = build_tile_db(f2, line2[3])
+    # Check Tile contents
+    # __eq__ is overridden so this line actually does stuff
+    tile1 == tile2
 
-            # Check Tile contents
-            # __eq__ is overridden so this line actually does stuff
-            tile1 == tile2
+    # Check Tile summary
+    assert_equal(f1.line, f2.line)
 
-            # Check Tile summary
-            assert_equal(line1, line2)
-            line1, line2 = get_line(f1, f2)
-
-        # Check primitive_defs declaration
-        assert_equal(line1, line2)
-        line1, line2 = get_line(f1, f2)
-
-        # Primitive_def checks
-        while line1 and line2:
-            # Elements w/ only CFG bits are not supported, so comparing
-            # element count will likely fail. So element cnt is dropped.
-            line1 = line1[:3]
-            while line2[1] != line1[1]:  # skip PrimDefs that are not supported
-                line2 = get_line(f2)
-            line2 = line2[:3]
-
-            assert_equal(line1, line2)
-
-            prim_def1, line1 = build_prim_def_db(f1, line1[1])
-            prim_def2, line2 = build_prim_def_db(f2, line2[1])
-
-            # __eq__ is overridden so this actually does stuff
-            prim_def1 == prim_def2
-
-    eprint(f"Done comparing XDLRC files. Errors: {_errors}")
-    print(f"Done comparing XDLRC files. Errors: {_errors}")
+    get_line(f1, f2)
 
 
-def init():
+def compare_prim_defs(f1, f2):
+    """
+    Compare the primitive_defs.
+
+    Assumes file_init() has been executed for each file parameter.
+    """
+
+    # Check primitive_defs declaration
+    assert_equal(f1.line, f2.line)
+    get_line(f1, f2)
+
+    # Primitive_def checks
+    while f1.line and f2.line:
+        # Elements w/ only CFG bits are not supported, so comparing
+        # element count will likely fail. So element cnt is dropped.
+        # TODO print the difference
+        f1.line = f1.line[:3]
+
+        # TODO print the difference
+        # skip PrimDefs that are not supported
+        while f2.line[1] != f1.line[1]:
+            get_line(f2)
+        f2.line = f2.line[:3]
+
+        assert_equal(f1.line, f2.line)
+
+        prim_def1 = build_prim_def_db(f1, f1.line[1])
+        prim_def2 = build_prim_def_db(f2, f2.line[1])
+
+        # __eq__ is overridden so this actually does stuff
+        prim_def1 == prim_def2
+
+
+def compare_xdlrc(f1, f2):
+    """
+    Compare two xdlrc files for equality.
+
+    Tiles must be listed in the same order. Primitive Def headers must
+    be in the same order.  Everything else can be out of order.
+    Assumes that file2 has been generated correctly and file1 is being
+    checked against it for correctness.
+
+    Assumes file_init() has been executed for each file parameter.
+    """
+
+    # check Tiles row_num col_num declaration
+    assert_equal(f1.line, f2.line)
+
+    # Tile chekcs
+    get_line(f1, f2)
+    while (f1.line and f2.line
+           and (f1.line[0] != XDLRC_KEY_WORD_KEYS.prim_defs)):
+        compare_tile(f1, f2)
+
+    compare_prim_defs(f1, f2)
+
+
+def init(fileName):
     """
     Set up the environment for __main__.
     Also useful to run after an import for debugging/testing
+
+    Parameters:
+        fileName (str) - Name of file to pass to XDLRC constructor
     """
     import os
 
@@ -603,18 +650,54 @@ def init():
     from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
 
     device_schema = Interchange(SCHEMA_DIR).device_resources_schema.Device
-    return XDLRC(read_capnp_file(device_schema, DEVICE_FILE),
-                 TEST_XDLRC.replace('.xdlrc', ''))
+    return XDLRC(read_capnp_file(device_schema, DEVICE_FILE))
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Generate XLDRC file and check for accuracy")
+    parser.add_argument("TEST_XDLRC", help="XDLRC file to test for accuracy",
+                        nargs='?', default=TEST_XDLRC)
+    parser.add_argument("CORRECT_XDLRC",
+                        help="Correct XDLRC file to compare against",
+                        nargs='?', default=CORRECT_XDLRC)
+    parser.add_argument("dir", help="Directory where files are located",
+                        nargs='?', default='')
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-t", "--tile", help="Parse files as single tile",
+                       action="store_true")
+    group.add_argument("-p", "--prim-defs",
+                       help="Parse files as primitive_defs only",
+                       action="store_true")
+    group.add_argument("--no-gen", help="Do not generate XDLRC file",
+                       action="store_true")
+    args = parser.parse_args()
 
-    start = time.time()
-    myDevice = init()
-    finish = time.time() - start
-    print(f"XDLRC generated in {finish} seconds")
+    if not args.no_gen and not (args.tile or args.prim_defs):
+        myDevice = init(args.dir+args.TEST_XDLRC)
+        start = time.time()
+        myDevice.generate_XDLRC()
+        finish = time.time() - start
+        print(f"XDLRC {args.dir+args.TEST_XDLRC} generated in {finish} sec ")
 
-    start = time.time()
-    compare_xdlrc(TEST_XDLRC, CORRECT_XDLRC)
-    finish = time.time() - start
-    print(f"XDLRC compared in {finish} seconds")
+    debugpy.breakpoint()
+    with (open(args.dir+args.TEST_XDLRC, "r") as f1,
+          open(args.dir+args.CORRECT_XDLRC, "r") as f2):
+
+        file_init(f1, f2)
+
+        start = time.time()
+
+        if args.tile:
+            compare_tile(f1, f2)
+        elif args.prim_defs:
+            compare_prim_defs(f1, f2)
+        else:
+            compare_xdlrc(f1, f2)
+
+        finish = time.time() - start
+        print(f"XDLRC compared in {finish} seconds")
+
+    eprint(f"Done comparing XDLRC files. Errors: {_errors}")
+    print(f"Done comparing XDLRC files. Errors: {_errors}")
