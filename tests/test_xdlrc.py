@@ -13,6 +13,10 @@ generation so these lines are skipped without warning or error.
 To be ran in the tests directory of the python-fpga-interchange project
 with the command:
     $python test_xdlrc.py -m interchange
+
+Differences that are deemed "acceptable" (see XDLRC.py comments) are
+tracked separately from errors and stored in the text file
+XDLRC_Exceptions.txt.
 """
 
 from collections import namedtuple
@@ -24,14 +28,6 @@ import time
 
 KeyWords = namedtuple(
     'KeyWords', 'comment tiles tile wire conn summary pip site pinwire prim_defs prim_def element cfg pin')  # noqa
-
-
-def myFunc():
-    return
-
-
-KeyWords.myFunc = myFunc
-
 
 # Dictionary contains XDLRC declarations as keys and expected token length
 # as values
@@ -61,8 +57,16 @@ _errors = 0
 unknowns = []
 
 
-def eprint(*args, **kwargs):
+def err_print(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
+
+
+XDLRC_Exceptions = "XDLRC_Exceptions.txt"
+XDLRC_Exceptions_f = None
+
+
+def eprint(str_in):
+    XDLRC_Exceptions_f.write(str_in + '\n')
 
 
 def file_init(*argv):
@@ -125,11 +129,16 @@ def get_line(*argv):
                     print(line)
                     unknowns.append(line[0])
                 continue
-            elif (key_word[0] != XDLRC_KEY_WORD_KEYS.comment and
-                  key_word != XDLRC_KEY_WORD_KEYS.cfg):  # CFG not supported
+
+            elif key_word == XDLRC_KEY_WORD_KEYS.cfg:  # ignore cfg lines
+                eprint(f"CFG_EXCEPTION triggered on line {f.line_num}")
+
+            elif key_word[0] != XDLRC_KEY_WORD_KEYS.comment:
                 # Make sure token is appropriate length
-                if len(line) < XDLRC_KEY_WORD[line[0]]:
-                    line += ['BLANK'] * XDLRC_KEY_WORD[line[0]]
+                expected_len = XDLRC_KEY_WORD[line[0]]
+                actual_len = len(line)
+                if actual_len < expected_len:
+                    line += ['BLANK'] * (expected_len - actual_len)
                 break
 
         # f.line is updated specifically in this way (NOT with =) to
@@ -149,7 +158,7 @@ def assert_equal(obj1, obj2):
     except AssertionError as e:
         global _errors
         _errors += 1
-        eprint(f"AssertionError caught.\nObj1:\n{obj1}\n\nObj2:\n{obj2}\n\n")
+        err_print(f"AssertionError caught.\nObj1:\n{obj1}\nObj2:\n{obj2}\n\n")
         return False
     return True
 
@@ -231,8 +240,8 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
             return False
 
         if self.name != other.name:
-            eprint("Fatal Error: Tile names do not match. Abort compare.")
-            eprint(f"Name1: {self.name} Name2: {other.name}\n\n")
+            err_print("Fatal Error: Tile names do not match. Abort compare.")
+            err_print(f"Name1: {self.name} Name2: {other.name}\n\n")
             return False
 
         # compare wires
@@ -241,11 +250,11 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
         uncommon_wires = keys[0].symmetric_difference(keys[1])
 
         for wire in uncommon_wires:
-            _errors += 1
             if wire in keys[0]:
-                eprint(f"Tile: {self.name} Extra Wire {wire}")
+                eprint(f"EXTRA_WIRE_EXCEPTION caught for tile {self.name}")
             else:
-                eprint(f"Tile: {self.name} Missing Wire {wire}")
+                _errors += 1
+                err_print(f"Tile: {self.name} Missing Wire {wire}")
 
         for wire in common_wires:
             conns = self.wires[wire]
@@ -256,7 +265,7 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
             debugpy.breakpoint()
             if conns != other_conns:
                 _errors += 1
-                eprint(f"Tile: {self.name} Wire conns mismatch for {wire}")
+                err_print(f"Tile: {self.name} Wire conns mismatch for {wire}")
 
         # compare pips
         keys = [set(self.pips.keys()), set(other.pips.keys())]
@@ -266,9 +275,9 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
         for wire_in in uncommon_pips:
             _errors += 1
             if wire_in in keys[0]:
-                eprint(f"Tile: {self.name} Extra Pip {wire_in}")
+                err_print(f"Tile: {self.name} Extra Pip {wire_in}")
             else:
-                eprint(f"Tile: {self.name} Missing Pip {wire_in}")
+                err_print(f"Tile: {self.name} Missing Pip {wire_in}")
 
         for wire_in in common_pips:
             wire_outs = self.pips[wire_in]
@@ -279,8 +288,8 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
             if wire_outs != other_wire_outs:
                 _errors += 1
-                eprint(f"Tile: {self.name} "
-                       + f"Pip connection mismatch for {wire_in}")
+                err_print(f"Tile: {self.name} "
+                          + f"Pip connection mismatch for {wire_in}")
 
         # compare primitive sites
         keys = [set(self.sites.keys()), set(other.sites.keys())]
@@ -290,9 +299,9 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
         for site in uncommon_sites:
             _errors += 1
             if site in keys[0]:
-                eprint(f"Tile: {self.name} Extra Site {site}")
+                err_print(f"Tile: {self.name} Extra Site {site}")
             else:
-                eprint(f"Tile: {self.name} Missing Site {site}")
+                err_print(f"Tile: {self.name} Missing Site {site}")
 
         for site in common_sites:
             pinwires = set(self.sites[site])
@@ -300,7 +309,7 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
             for pw in pinwires.symmetric_difference(other_pinwires):
                 _errors += 1
-                eprint(f"Tile: {self.name} PinWire mismatch for {pw}")
+                err_print(f"Tile: {self.name} PinWire mismatch for {pw}")
 
         return tmp_err == _errors
 
@@ -339,8 +348,8 @@ def build_tile_db(f, tileName):
             get_line(f)
 
         elif f.line[0] == XDLRC_KEY_WORD_KEYS.site:
-            # TODO print message to stderr
             if f.line[3].upper() == XDLRC_UNSUPPORTED_WORDS[0]:
+                eprint(f"PKG_SPECIFIC_EXCEPTION caught on line {f.line_num}:")
                 f.line.remove(f.line[3])
 
             sites_key = f.line[1] + ' ' + f.line[2]
@@ -356,10 +365,10 @@ def build_tile_db(f, tileName):
                     PinWire(f.line[1], direction, f.line[3]))
                 get_line(f)
         else:
-            eprint("Error: build_tile_db() hit default branch")
-            eprint("This should not happen if XDLRC files are equal")
-            eprint(f"Line {f.line_num}:")
-            eprint(f.line)
+            err_print("Error: build_tile_db() hit default branch")
+            err_print("This should not happen if XDLRC files are equal")
+            err_print(f"Line {f.line_num}:")
+            err_print(f.line)
             sys.exit()
 
     return tile
@@ -451,8 +460,8 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
             return False
 
         if self.name != other.name:
-            eprint("Fatal Error: Primitive Def name mismatch")
-            eprint(f"Name1: {self.name} Name2: {other.name}")
+            err_print("Fatal Error: Primitive Def name mismatch")
+            err_print(f"Name1: {self.name} Name2: {other.name}")
             return False
 
         global _errors
@@ -465,14 +474,15 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
         for pin in pins.symmetric_difference(other_pins):
             _errors += 1
             if pin not in pins:
-                eprint(f"Prim_Def: {self.name} Extra Pin {self.pins[pin]}")
+                err_print(f"Prim_Def: {self.name} Extra Pin {self.pins[pin]}")
             else:
-                eprint(f"Prim_Def: {self.name} Missing Pin {other.pins[pin]}")
+                err_print(
+                    f"Prim_Def: {self.name} Missing Pin {other.pins[pin]}")
 
         for pin in pins.intersection(other_pins):
             if self.pins[pin] != other.pins[pin]:
-                eprint(f"Prim_Def: {self.name} Pin Mismatch {self.pins[pin]} "
-                       + f"{other.pins[pin]}")
+                err_print(f"Prim_Def: {self.name} Pin Mismatch {self.pins[pin]} "
+                          + f"{other.pins[pin]}")
         # Check elements
         keys = set(self.elements.keys())
         other_keys = set(other.elements.keys())
@@ -480,15 +490,15 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
         for key in keys.symmetric_difference(other_keys):
             _errors += 1
             if key in self.elements.keys():
-                eprint(f"Prim_Def {self.name} Extra Element {key}")
+                err_print(f"Prim_Def {self.name} Extra Element {key}")
             else:
-                eprint(f"Prim_Def {self.name} Missing Element {key}")
+                err_print(f"Prim_Def {self.name} Missing Element {key}")
 
         for key in keys.intersection(other_keys):
             if self.elements[key] != other.elements[key]:
                 _errors += 1
-                eprint(f"Prim_Def {self.name} Element Mismatch "
-                       + f"{self.elements[key]} {other.elements[key]}")
+                err_print(f"Prim_Def {self.name} Element Mismatch "
+                          + f"{self.elements[key]} {other.elements[key]}")
 
         return tmp_err == _errors
 
@@ -538,9 +548,10 @@ def build_prim_def_db(f, name):
                     else:
                         break
             else:
+                eprint(f"CFG_ELEMENT_EXCEPTION caught on line {f.line_num}")
                 get_line(f)
         else:
-            eprint("Error: build_prim_def_db hit default branch")
+            err_print("Error: build_prim_def_db hit default branch")
             get_line(f)
 
     return prim_def
@@ -582,16 +593,21 @@ def compare_prim_defs(f1, f2):
 
     # Primitive_def checks
     while f1.line and f2.line:
-        # Elements w/ only CFG bits are not supported, so comparing
-        # element count will likely fail. So element cnt is dropped.
-        # TODO print the difference
-        f1.line = f1.line[:3]
 
         # TODO print the difference
         # skip PrimDefs that are not supported
         while f2.line[1] != f1.line[1]:
+            eprint(f"PRIM_DEF_GENERAL_EXCEPTION caught on line {f2.line_num}")
             get_line(f2)
+
+        if f2.line[3] != f1.line[3]:
+            eprint(f"CFG_PRIM_DEF_EXCEPTION caught on line {f2.line_num}")
         f2.line = f2.line[:3]
+
+        # Elements w/ only CFG bits are not supported, so comparing
+        # element count will likely fail. So element cnt is dropped.
+        # TODO print the difference
+        f1.line = f1.line[:3]
 
         assert_equal(f1.line, f2.line)
 
@@ -659,6 +675,8 @@ if __name__ == "__main__":
                         nargs='?', default=CORRECT_XDLRC)
     parser.add_argument("dir", help="Directory where files are located",
                         nargs='?', default='')
+    parser.add_argument("-e", help="Name of known exception file",
+                        default='')
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-t", "--tile", help="Parse files as single tile",
                        action="store_true")
@@ -676,7 +694,15 @@ if __name__ == "__main__":
         finish = time.time() - start
         print(f"XDLRC {args.dir+args.TEST_XDLRC} generated in {finish} sec ")
 
-    debugpy.breakpoint()
+    if args.e:
+        XDLRC_Exceptions = args.e
+
+    XDLRC_Exceptions_f = open(XDLRC_Exceptions, "w")
+    eprint("Line numbers are expressed CORRECT_XDLRC:TEST_XDLRC")
+    eprint("Some errors are not applicable to both files. These are expressed"
+           + " with the appropriate side of the colon empty.")
+    eprint("See XDLRC.py for further explanation of file contents\n\n\n")
+
     with (open(args.dir+args.TEST_XDLRC, "r") as f1,
           open(args.dir+args.CORRECT_XDLRC, "r") as f2):
 
@@ -694,5 +720,6 @@ if __name__ == "__main__":
         finish = time.time() - start
         print(f"XDLRC compared in {finish} seconds")
 
-    eprint(f"Done comparing XDLRC files. Errors: {_errors}")
+    err_print(f"Done comparing XDLRC files. Errors: {_errors}")
     print(f"Done comparing XDLRC files. Errors: {_errors}")
+    XDLRC_Exceptions_f.close()
