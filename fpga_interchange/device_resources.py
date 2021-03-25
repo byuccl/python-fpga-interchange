@@ -531,6 +531,7 @@ class TileType():
     def __init__(self, strs, tile_type, tile_type_index):
         self.tile_type_index = tile_type_index
         self.name = strs[tile_type.name]
+        self.wires = tile_type.wires
         self.string_index_to_wire_id_in_tile_type = {}
         for wire_id, string_index in enumerate(tile_type.wires):
             self.string_index_to_wire_id_in_tile_type[string_index] = wire_id
@@ -909,7 +910,7 @@ class DeviceResources():
 
                     for bel in site_type.bels:
                         yield tile_name, site_name, tile.tile_type, \
-                                site.site_type_name, bel.name
+                            site.site_type_name, bel.name
 
     def get_primitive_library(self):
         from fpga_interchange.interchange_capnp import to_logical_netlist
