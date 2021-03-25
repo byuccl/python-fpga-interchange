@@ -7,6 +7,7 @@ contained in XDLRC_KEY_WORD are currently supported (case-insensitive).
 If an unknown declaration is encountered, the line is skipped and a
 warning is printed.
 
+<<<<<<< HEAD
 Note: CFG is recognized as a declaration, but not supported in XDLRC
 generation so these lines are skipped without warning or error.
 
@@ -45,9 +46,27 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
                                prim_defs='PRIMITIVE_DEFS',
                                prim_def='PRIMITIVE_DEF', element='ELEMENT',
                                cfg='CFG', pin='PIN')
+== == == =
+To be ran in the tests directory of the python-fpga-interchange project
+with the command:
+    $python test_xdlrc.py - m interchange
+"""
+
+import os
+import debugpy
+import time
+from collections import namedtuple
+
+KeyWords = namedtuple(
+    'KeyWords', 'comment tiles tile wire conn summary pip site pinwire')
+
+XDLRC_KEY_WORD = KeyWords('#', 'TILES', 'TILE', 'WIRE', 'CONN', 'TILE_SUMMARY',
+                          'PIP', 'PRIMITIVE_SITE', 'PINWIRE')
+>>>>>>> 2d43c569855915572f94821460608e5cd73a370e
 
 TEST_XDLRC = 'xc7a100t.xdlrc'
 CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
+<<<<<<< HEAD
 # TODO: make these paths not hard-coded
 SCHEMA_DIR = "/home/reilly/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
 DEVICE_FILE = "/home/reilly/xc7a100t.device"
@@ -74,8 +93,8 @@ def file_init(*argv):
     Add line counting and get_line storage to file objects.
 
     Adds two members to file:
-        line_num (int)  - Current line number
-        line     (list) - Output of get_line()
+        line_num(int) - Current line number
+        line(list) - Output of get_line()
 
     Note: get_line is called to initialize line.
     """
@@ -84,6 +103,21 @@ def file_init(*argv):
         f.line_num = 0
         f.line = []
     get_line(*argv)
+=======
+# CORRECT_XDLRC = '/home/reilly/partial.xdlrc'
+SCHEMA_DIR = "/home/reilly/RW/RapidWright/interchange"
+TEST_DEVICE_FILE = "/home/reilly/RW/RapidWright/xc7a100t.device"
+>>>>>>> 2d43c569855915572f94821460608e5cd73a370e
+
+
+class PinWire(namedtuple('PinWire', 'name dir type')):
+    def __eq__(self, other):
+        return ((self.name == other.name) and (self.dir == other.dir)
+                and (self.type == other.type))
+
+
+unknowns = []
+lines = {}
 
 
 def get_line(*argv):
@@ -100,7 +134,7 @@ def get_line(*argv):
     Updates f.line to contain the result
 
     Parameters:
-        Any number of (XDLRC) file objects.
+        Any number of(XDLRC) file objects.
     """
 
     for f in argv:
@@ -110,17 +144,29 @@ def get_line(*argv):
             if not line:
                 # EOF is reached in this file. end of parse
                 print(f"file reached EOF\n\n")
+<<<<<<< HEAD
                 if unknowns:
                     print(unknowns)
                 break
 
             # keep track of line numbers
             f.line_num += 1
+=======
+                print(unknowns)
+                break
+
+            # keep track of line numbers
+            if f.name in lines.keys():
+                lines[f.name] += 1
+            else:
+                lines[f.name] = 1
+>>>>>>> 2d43c569855915572f94821460608e5cd73a370e
 
             line = line.strip("()\n\t ")
             if not line:
                 continue
             line = line.upper().split()
+<<<<<<< HEAD
             key_word = line[0]
             if key_word not in XDLRC_KEY_WORD_KEYS:
                 if line[0] not in unknowns:
@@ -129,6 +175,22 @@ def get_line(*argv):
                     print(line)
                     unknowns.append(line[0])
                 continue
+=======
+            if line[0] not in XDLRC_KEY_WORD:
+                if line[0] not in unknowns:
+                    print(f"Warning: Unknown Key word {line[0]}. Ignoring line"
+                          + f" {lines[f.name]}")
+                    print(line)
+                    unknowns.append(line[0])
+                continue
+            elif line[0][0] != XDLRC_KEY_WORD.comment:
+                break
+        ret.append(line)
+    if len(ret) == 1:
+        return ret[0]
+    else:
+        return ret
+>>>>>>> 2d43c569855915572f94821460608e5cd73a370e
 
             elif key_word == XDLRC_KEY_WORD_KEYS.cfg:  # ignore cfg lines
                 eprint(f"CFG_EXCEPTION triggered on line {f.line_num}")
@@ -141,10 +203,39 @@ def get_line(*argv):
                     line += ['BLANK'] * (expected_len - actual_len)
                 break
 
+<<<<<<< HEAD
         # f.line is updated specifically in this way (NOT with =) to
         # support shallow copies of f.line correctly being updated
         f.line.clear()
         f.line.extend(line)
+=======
+    Returns:
+        [[], {}, []] - List containing 1) a list of wires, 2) a
+        dictionary where tile wires are keys and values are a list of
+        tuples of the (tile, wire) for the corresponding conns, 3) the
+        last output of get_line() (tile_summary or empty for EOF)
+    """
+
+    wires = []
+    conns = {}  # key: Wire Name, Value: List of conns
+    sites = {}  # key: Site Name, Value: PinWire
+    line = get_line(myFile)
+    while line and line[0] != XDLRC_KEY_WORD.summary:
+        if line[0] == XDLRC_KEY_WORD.wire:
+            wires.append(line[1])
+            conns[line[1]] = []
+            line = get_line(myFile)
+            while line and line[0] == XDLRC_KEY_WORD.conn:
+                conns[wires[-1]].append(tuple([line[1], line[2]]))
+                line = get_line(myFile)
+        # elif line[0] == XDLRC_KEY_WORD.site:
+        #     site =
+        #     while line and line[0] == XDLRC_KEY_WORD.pinwire:
+
+        # else:
+        #     line = get_line(myFile)
+    return [wires, conns, line]
+>>>>>> > 2d43c569855915572f94821460608e5cd73a370e
 
 
 def assert_equal(obj1, obj2):
@@ -156,9 +247,15 @@ def assert_equal(obj1, obj2):
     try:
         assert obj1 == obj2
     except AssertionError as e:
+
+
+<< << << < HEAD
         global _errors
         _errors += 1
         err_print(f"AssertionError caught.\nObj1:\n{obj1}\nObj2:\n{obj2}\n\n")
+== == == =
+        print(f"AssertionError caught.\nObj1:\n{obj1}\n\nObj2:\n{obj2}\n\n")
+>>>>>> > 2d43c569855915572f94821460608e5cd73a370e
         return False
     return True
 
