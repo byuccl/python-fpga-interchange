@@ -10,6 +10,9 @@
 # SPDX-License-Identifier: ISC
 from enum import Enum
 
+# Note: Increment by 1 ChipInfo.version number each time schema changes to
+# allow nextpnr binary to detect changes to schema.
+
 
 class ConstraintType(Enum):
     TAG_IMPLIES = 0
@@ -53,6 +56,10 @@ class BelInfo():
         # Index into CellMapPOD::cell_bel_pin_map
         self.pin_map = []
 
+        # Index into ports/types/wires if this BEL has inverting site pips.
+        self.non_inverting_pin = -1
+        self.inverting_pin = -1
+
     def field_label(self, label_prefix, field):
         prefix = '{}.site{}.{}.{}'.format(label_prefix, self.site, self.name,
                                           field)
@@ -95,6 +102,12 @@ class BelInfo():
         bba.u8(self.lut_element)
 
         bba.ref(self.field_label(label_prefix, 'pin_map'))
+
+        bba.u8(self.non_inverting_pin)
+        bba.u8(self.inverting_pin)
+
+        # Pad to nearest 32-bit alignment
+        bba.u16(0)
 
 
 class BelPort():
@@ -184,8 +197,17 @@ class PipInfo():
 
         self.extra_data = 0
 
+        self.pseudo_cell_wires = []
+
+    def field_label(self, label_prefix, field):
+        return '{}.{}.{}.{}.{}'.format(label_prefix, self.src_index,
+                                       self.dst_index, self.extra_data, field)
+
     def append_children_bba(self, bba, label_prefix):
-        pass
+        bba.label(
+            self.field_label(label_prefix, 'pseudo_cell_wires'), 'int32_t')
+        for wire in self.pseudo_cell_wires:
+            bba.u32(wire)
 
     def append_bba(self, bba, label_prefix):
         assert self.src_index != -1
@@ -197,6 +219,8 @@ class PipInfo():
         bba.u16(self.site_variant)
         bba.u16(self.bel)
         bba.u16(self.extra_data)
+        bba.ref(self.field_label(label_prefix, 'pseudo_cell_wires'))
+        bba.u32(len(self.pseudo_cell_wires))
 
 
 class ConstraintTag():
@@ -535,20 +559,42 @@ class LutCell():
         bba.str_id(self.parameter)
 
 
+class CellParameter():
+    def __init__(self):
+        self.cell_type = ''
+        self.parameter = ''
+        self.format = 0
+        self.default_value = ''
+
+    def append_children_bba(self, bba, label_prefix):
+        pass
+
+    def append_bba(self, bba, label_prefix):
+        bba.str_id(self.cell_type)
+        bba.str_id(self.parameter)
+        bba.u32(self.format)
+        bba.str_id(self.default_value)
+
+
 class CellMap():
-    int_fields = ['cell_names', 'cell_bel_buckets']
-    fields = ['cell_bel_map', 'lut_cells']
-    field_types = ['CellBelMapPOD', 'LutCellPOD']
+    int_fields = ['cell_names', 'global_buffers', 'cell_bel_buckets']
+    fields = ['cell_bel_map', 'lut_cells', 'cell_parameters']
+    field_types = ['CellBelMapPOD', 'LutCellPOD', 'CellParameterPOD']
 
     def __init__(self):
         self.cell_names = []
+        self.global_buffers = []
         self.cell_bel_buckets = []
         self.cell_bel_map = []
         self.lut_cells = []
+        self.cell_parameters = []
 
     def add_cell(self, cell_name, cell_bel_bucket):
         self.cell_names.append(cell_name)
         self.cell_bel_buckets.append(cell_bel_bucket)
+
+    def add_global_buffer_bel(self, bel_name):
+        self.global_buffers.append(bel_name)
 
     def field_label(self, label_prefix, field):
         prefix = '{}.{}'.format(label_prefix, field)
@@ -643,6 +689,8 @@ class Constants():
         self.gnd_net_name = ''
         self.vcc_net_name = ''
 
+        self.best_constant_net = ''
+
     def append_children_bba(self, bba, label_prefix):
         pass
 
@@ -664,13 +712,16 @@ class Constants():
         bba.str_id(self.gnd_net_name)
         bba.str_id(self.vcc_net_name)
 
+        bba.str_id(self.best_constant_net)
+
 
 class ChipInfo():
     def __init__(self):
         self.name = ''
         self.generator = ''
 
-        self.version = 0
+        # Note: Increment by 1 this whenever schema changes.
+        self.version = 5
         self.width = 0
         self.height = 0
 
