@@ -481,8 +481,8 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
 
         for pin in pins.intersection(other_pins):
             if self.pins[pin] != other.pins[pin]:
-                err_print(f"Prim_Def: {self.name} Pin Mismatch {self.pins[pin]} "
-                          + f"{other.pins[pin]}")
+                err_print(f"Prim_Def: {self.name} Pin Mismatch "
+                          + f"{self.pins[pin]} {other.pins[pin]}")
         # Check elements
         keys = set(self.elements.keys())
         other_keys = set(other.elements.keys())
