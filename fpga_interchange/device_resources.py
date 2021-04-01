@@ -708,6 +708,7 @@ class DeviceResources():
 
         self.tile_wire_index_to_node_index = None
         self.parameter_definitions = None
+        self.parameters_for_cell = None
 
     def __sort_tile_cols__(tile):
         """
@@ -941,12 +942,18 @@ class DeviceResources():
     def init_parameter_definitions(self):
         assert self.parameter_definitions is None
         self.parameter_definitions = {}
+        self.parameters_for_cell = {}
 
         for cell_parameters in self.device_resource_capnp.parameterDefs.cells:
             cell_type = self.strs[cell_parameters.cellType]
 
+            cell_type not in self.parameters_for_cell
+            self.parameters_for_cell[cell_type] = set()
+
             for parameter in cell_parameters.parameters:
                 name = self.strs[parameter.name]
+
+                self.parameters_for_cell[cell_type].add(name)
 
                 key = (cell_type, name)
 
@@ -979,7 +986,7 @@ class DeviceResources():
         """ Return ParameterDefinition class if parameter exists, else None.
 
         Arguments:
-            cell_type (str) - Cell type to get parameter defintion for.
+            cell_type (str) - Cell type to get parameter definition for.
             parameter_name (str) - Parameter name to get definition.
 
         Returns:
@@ -994,3 +1001,28 @@ class DeviceResources():
 
         return self.parameter_definitions.get((cell_type, parameter_name),
                                               None)
+
+    def add_default_parameters(self, cell_type, property_map):
+        """ Add default parameters to property_map for cell_type supplied.
+
+        If parameter is not already set, sets that parameter to its default
+        value.
+
+        Arguments:
+            cell_type (str) - Cell type to get default parameters for.
+            property_map (dict-like of str to str) - Property map for cell.
+
+        """
+        if self.parameter_definitions is None:
+            self.init_parameter_definitions()
+
+        if cell_type not in self.parameters_for_cell:
+            return
+
+        for parameter_name in self.parameters_for_cell[cell_type]:
+            if parameter_name in property_map:
+                continue
+
+            key = (cell_type, parameter_name)
+            property_map[parameter_name] = self.parameter_definitions[
+                key].default_value
