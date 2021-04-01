@@ -564,6 +564,7 @@ class TileType():
     def __init__(self, strs, tile_type, tile_type_index):
         self.tile_type_index = tile_type_index
         self.name = strs[tile_type.name]
+        self.wires = tile_type.wires
         self.string_index_to_wire_id_in_tile_type = {}
         for wire_id, string_index in enumerate(tile_type.wires):
             self.string_index_to_wire_id_in_tile_type[string_index] = wire_id
