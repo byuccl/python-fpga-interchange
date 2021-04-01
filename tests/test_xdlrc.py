@@ -1,19 +1,15 @@
 """
 Functions for comparing two XDLRC files.
-
 Used to test DeviceResources.generate_xdlrc().  Generates and checks for
 correctness an XDLRC file for xc7a100tcsg-1 part. Only declarations
 contained in XDLRC_KEY_WORD are currently supported (case-insensitive).
 If an unknown declaration is encountered, the line is skipped and a
 warning is printed.
-
 Note: CFG is recognized as a declaration, but not supported in XDLRC
 generation so these lines are skipped without warning or error.
-
 To be ran in the tests directory of the python-fpga-interchange project
 with the command:
     $python test_xdlrc.py -m interchange
-
 Differences that are deemed "acceptable" (see XDLRC.py comments) are
 tracked separately from errors and stored in the text file
 XDLRC_Exceptions.txt.
@@ -72,11 +68,9 @@ def eprint(str_in):
 def file_init(*argv):
     """
     Add line counting and get_line storage to file objects.
-
     Adds two members to file:
         line_num (int)  - Current line number
         line     (list) - Output of get_line()
-
     Note: get_line is called to initialize line.
     """
 
@@ -89,16 +83,13 @@ def file_init(*argv):
 def get_line(*argv):
     """
     Get the next eligible line in one or both XDLRC files.
-
     Strips beginning and end of line of '()\n\t ' characters.  Also
     checks the first word of each line to see if it is a supported XDLRC
     keyword. Uses two global variables - unknowns and lines. Lines is a
     dict that keeps track of line numbers for each file. Unknowns is a
     list of unrecognized XDLRC key words.
-
     Updates f.line_num to contain current line number.
     Updates f.line to contain the result
-
     Parameters:
         Any number of (XDLRC) file objects.
     """
@@ -184,10 +175,8 @@ class Direction(enum.Enum):
 class PinWire(namedtuple('PinWire', 'name direction wire')):
     """
     Lightweight class for holding XDLRC pinwire information.
-
     __eq__() has been overridden for accurate comparisons.
     __hash__() is overridden so PinWire can be in a set.
-
     Members:
         name  (str)       - Name of the pin.
         direction (Direction) - Direction of the pin.
@@ -208,10 +197,8 @@ class PinWire(namedtuple('PinWire', 'name direction wire')):
 class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
     """
     Lightweight class for holding XDLRC tile information.
-
     __eq__() is overridden for accurate comparison.  It is important to
     note that it assumes that "other" is correct.
-
     Members:
         name  (str)  - Tile name
         wires (dict) - Key: Wire Name (str)
@@ -225,7 +212,6 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
     def __eq__(self, other):
         """
         Check two objects for equality.
-
         Assumes other is always correct.
         Fails immediately upon type mismatch.
         Fails immediately if tile names differ, otherwise does NOT fail
@@ -317,11 +303,9 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 def build_tile_db(f, tileName):
     """
     Build a TileStruct of a tile by scanning XDLRC f.
-
     Breaks on tile_summary or on EOF.
     Parameters:
         f (file object) - file to scan for tile information
-
     Returns:
         tile - TileStruct representing the tile
     """
@@ -377,9 +361,7 @@ def build_tile_db(f, tileName):
 class Conn(namedtuple('Conn', 'bel1 belpin1 bel2 belpin2')):
     """
     Lightweight class for holding XDLRC conn information.
-
     __eq__() is overridden for accruate comparison
-
     Members:
         bel1    (str) - Name of the INPUT Bel
         belpin1 (str) - Name of the INPUT Bel pin
@@ -400,9 +382,7 @@ class Conn(namedtuple('Conn', 'bel1 belpin1 bel2 belpin2')):
 class Element(namedtuple('Element', 'name pins conns')):
     """
     Lightweight class for holding XDLRC element information.
-
     __eq__() is overridden for accruate comparison
-
     Members:
         name  (str)  - Element name
         pins  (list) - List of Element pins (PinWire)
@@ -433,10 +413,8 @@ class Element(namedtuple('Element', 'name pins conns')):
 class PrimDef(namedtuple('PrimDef', 'name pins elements')):
     """
     Lightweight class for holding XDLRC primitive def information.
-
     __eq__() is overridden for accurate comparison.  It is important to
     note that it is assumed that the "other" operand is correct.
-
     Members:
         name     (str)  - Name of Primitive Def
         pins     (dict) - Key: PinWire name (str)
@@ -448,7 +426,6 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
     def __eq__(self, other):
         """
         Check two objects for equality.
-
         Assumes other is always correct.
         Fails immediately upon type mismatch.
         Fails immediately if PrimDef names differ, otherwise does NOT
@@ -481,8 +458,8 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
 
         for pin in pins.intersection(other_pins):
             if self.pins[pin] != other.pins[pin]:
-                err_print(f"Prim_Def: {self.name} Pin Mismatch "
-                          + f"{self.pins[pin]} {other.pins[pin]}")
+                err_print(f"Prim_Def: {self.name} Pin Mismatch {self.pins[pin]} "
+                          + f"{other.pins[pin]}")
         # Check elements
         keys = set(self.elements.keys())
         other_keys = set(other.elements.keys())
@@ -506,12 +483,9 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
 def build_prim_def_db(f, name):
     """
     Build a PrimDef by scanning f.
-
     Breaks on EOF or new Primitive_Def declaration.
-
     Parameters:
         f (file object) - file to scan for tile information
-
     Returns:
         prim_def - PrimDef object representing the primitive_def.
     """
@@ -560,7 +534,6 @@ def build_prim_def_db(f, name):
 def compare_tile(f1, f2):
     """
     Parse and compare a single tile.
-
     Assumes file_init() has been executed for each file parameter.
     """
 
@@ -583,7 +556,6 @@ def compare_tile(f1, f2):
 def compare_prim_defs(f1, f2):
     """
     Compare the primitive_defs.
-
     Assumes file_init() has been executed for each file parameter.
     """
 
@@ -621,12 +593,10 @@ def compare_prim_defs(f1, f2):
 def compare_xdlrc(f1, f2):
     """
     Compare two xdlrc files for equality.
-
     Tiles must be listed in the same order. Primitive Def headers must
     be in the same order.  Everything else can be out of order.
     Assumes that file2 has been generated correctly and file1 is being
     checked against it for correctness.
-
     Assumes file_init() has been executed for each file parameter.
     """
 
@@ -646,7 +616,6 @@ def init(fileName):
     """
     Set up the environment for __main__.
     Also useful to run after an import for debugging/testing
-
     Parameters:
         fileName (str) - Name of file to pass to XDLRC constructor
     """
