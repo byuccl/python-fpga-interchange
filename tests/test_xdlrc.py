@@ -458,8 +458,8 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
 
         for pin in pins.intersection(other_pins):
             if self.pins[pin] != other.pins[pin]:
-                err_print(f"Prim_Def: {self.name} Pin Mismatch {self.pins[pin]} "
-                          + f"{other.pins[pin]}")
+                err_print(f"Prim_Def: {self.name} Pin Mismatch\n"
+                          + f"\t{self.pins[pin]}\n\t{other.pins[pin]}")
         # Check elements
         keys = set(self.elements.keys())
         other_keys = set(other.elements.keys())
@@ -474,8 +474,8 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
         for key in keys.intersection(other_keys):
             if self.elements[key] != other.elements[key]:
                 _errors += 1
-                err_print(f"Prim_Def {self.name} Element Mismatch "
-                          + f"{self.elements[key]} {other.elements[key]}")
+                err_print(f"Prim_Def {self.name} Element Mismatch\n"
+                          + f"\t{self.elements[key]}\n\t{other.elements[key]}")
 
         return tmp_err == _errors
 
@@ -566,19 +566,18 @@ def compare_prim_defs(f1, f2):
     # Primitive_def checks
     while f1.line and f2.line:
 
-        # TODO print the difference
-        # skip PrimDefs that are not supported
-        while f2.line[1] != f1.line[1]:
-            eprint(f"PRIM_DEF_GENERAL_EXCEPTION caught on line {f2.line_num}")
+        while f2.line[1] != f1.line[1]:  # Not all ISE prim defs represented
+            eprint(f"PRIM_DEF_GENERAL_EXCEPTION caught on line {f2.line_num}."
+                   + f"PRIMITIVE_DEF {f2.line[1]} missing.")
             get_line(f2)
-
-        if f2.line[3] != f1.line[3]:
-            eprint(f"CFG_PRIM_DEF_EXCEPTION caught on line {f2.line_num}")
-        f2.line = f2.line[:3]
+            while f2.line[0] != XDLRC_KEY_WORD_KEYS.prim_def:
+                get_line(f2)
 
         # Elements w/ only CFG bits are not supported, so comparing
         # element count will likely fail. So element cnt is dropped.
-        # TODO print the difference
+        if f2.line[3] != f1.line[3]:
+            eprint(f"CFG_PRIM_DEF_EXCEPTION caught on line {f2.line_num}")
+        f2.line = f2.line[:3]
         f1.line = f1.line[:3]
 
         assert_equal(f1.line, f2.line)
@@ -612,7 +611,7 @@ def compare_xdlrc(f1, f2):
     compare_prim_defs(f1, f2)
 
 
-def init(fileName):
+def init(fileName=''):
     """
     Set up the environment for __main__.
     Also useful to run after an import for debugging/testing
@@ -630,7 +629,7 @@ def init(fileName):
     from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
 
     device_schema = Interchange(SCHEMA_DIR).device_resources_schema.Device
-    return XDLRC(read_capnp_file(device_schema, DEVICE_FILE))
+    return XDLRC(read_capnp_file(device_schema, DEVICE_FILE), fileName)
 
 
 if __name__ == "__main__":
@@ -678,7 +677,7 @@ if __name__ == "__main__":
         file_init(f1, f2)
 
         start = time.time()
-
+        debugpy.breakpoint()
         if args.tile:
             compare_tile(f1, f2)
         elif args.prim_defs:

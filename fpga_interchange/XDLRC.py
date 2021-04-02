@@ -219,7 +219,7 @@ class XDLRC(DeviceResources):
         xdlrc = self.xdlrc
 
         # PRIMITIVE_DEFS declaration
-        xdlrc.write(f")\n (primitive_defs {len(raw_repr.siteTypeList)}\n")
+        xdlrc.write(f" (primitive_defs {len(raw_repr.siteTypeList)}\n")
 
         # PRIMITIVE_DEF declarations
         # Semantics to ensure primitive_defs are added alphabetically
@@ -271,9 +271,9 @@ class XDLRC(DeviceResources):
                             direction = convert_direction(bel_pin2_r.dir)
                             direction_str = ''
                             if direction == Direction.Input:
-                                direction_str = '<=='
-                            elif direction == Direction.Output:
                                 direction_str = '==>'
+                            elif direction == Direction.Output:
+                                direction_str = '<=='
 
                             xdlrc.write(f"\t\t\t(conn {bel.name} "
                                         + f"{bel_pin_name} "
@@ -294,6 +294,8 @@ class XDLRC(DeviceResources):
         # TILE declarations
         for tile in self.tiles:
             self._generate_tile(tile)
+
+        self.xdlrc.write(")\n")
 
         # PRIMITIVE_DEFS
         self.generate_prim_defs()
