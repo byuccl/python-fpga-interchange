@@ -894,7 +894,7 @@ class DeviceResources():
             pin_name=pin_name,
             wire_name=wire_name)
 
-   def get_constraints(self):
+    def get_constraints(self):
         constraints = Constraints()
         constraints.read_constraints(self.device_resource_capnp.constraints)
 
@@ -922,7 +922,7 @@ class DeviceResources():
 
     def get_constants(self):
         constants = self.device_resource_capnp.constants
-        
+
         # Have a default in case it can be any name!
         vcc_net_name = 'GLOBAL_LOGIC1'
         gnd_net_name = 'GLOBAL_LOGIC0'
