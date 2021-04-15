@@ -644,7 +644,7 @@ if __name__ == "__main__":
     parser.add_argument("dir", help="Directory where files are located",
                         nargs='?', default='')
     parser.add_argument("-e", help="Name of known exception file",
-                        default='')
+                        default=XDLRC_Exceptions)
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-t", "--tile", help="Parse files as single tile",
                        action="store_true")
@@ -666,13 +666,16 @@ if __name__ == "__main__":
         XDLRC_Exceptions = args.e
 
     XDLRC_Exceptions_f = open(XDLRC_Exceptions, "w")
-    eprint("Line numbers are expressed CORRECT_XDLRC:TEST_XDLRC")
-    eprint("Some errors are not applicable to both files. These are expressed"
-           + " with the appropriate side of the colon empty.")
-    eprint("See XDLRC.py for further explanation of file contents\n\n\n")
 
     with (open(args.dir+args.TEST_XDLRC, "r") as f1,
-          open(args.dir+args.CORRECT_XDLRC, "r") as f2):
+          open(args.dir+args.CORRECT_XDLRC, "r") as f2,
+          open(XDLRC_Exceptions, "w") as f3):
+
+        XDLRC_Exceptions_f = f3
+        eprint("Line numbers are expressed CORRECT_XDLRC:TEST_XDLRC")
+        eprint("Some errors are not applicable to both files. These are "
+               + "expressed with the appropriate side of the colon empty.")
+        eprint("See XDLRC.py for further explanation of file contents\n\n\n")
 
         file_init(f1, f2)
 
