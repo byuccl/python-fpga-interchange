@@ -21,6 +21,7 @@ import enum
 import os
 import sys
 import time
+import json
 
 KeyWords = namedtuple(
     'KeyWords', 'comment tiles tile wire conn summary pip site pinwire prim_defs prim_def element cfg pin')  # noqa
@@ -47,6 +48,8 @@ CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
 # TODO: make these paths not hard-coded
 SCHEMA_DIR = "/home/reilly/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
 DEVICE_FILE = "/home/reilly/xc7a100t.device"
+
+vivado = {}
 
 global _errors
 _errors = 0
@@ -236,11 +239,23 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
         uncommon_wires = keys[0].symmetric_difference(keys[1])
 
         for wire in uncommon_wires:
+
             if wire in keys[0]:
-                eprint(f"EXTRA_WIRE_EXCEPTION caught for tile {self.name}")
+                if wire in vivado[self.name]['wires']:
+                    eprint(f"EXTRA_WIRE_EXCEPTION caught for tile {self.name} "
+                           + f"Wire: {wire}")
+                else:
+                    _errors += 1
+                    err_print(
+                        f"Extra wire not in Vivado tile {self.name} Wire {wire}")
             else:
-                _errors += 1
-                err_print(f"Tile: {self.name} Missing Wire {wire}")
+                if wire not in vivado[self.name]['wires']:
+                    eprint(f"MISSING_WIRE_EXCEPTION caught for tile {self.name} "
+                           + f"Wire {wire}")
+                else:
+                    _errors += 1
+                    err_print(
+                        f"Wire missing but in Vivado/ISE for tile {self.name} Wire {wire}")
 
         for wire in common_wires:
             conns = self.wires[wire]
@@ -248,10 +263,14 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
             conns.sort()
             other_conns.sort()
-            debugpy.breakpoint()
+
             if conns != other_conns:
                 _errors += 1
-                err_print(f"Tile: {self.name} Wire conns mismatch for {wire}")
+                msg = ""
+                if wire not in vivado[self.name]['wires']:
+                    msg = "NoVivado"
+                err_print(
+                    f"Tile: {self.name} Wire conns mismatch for {wire} {msg}")
 
         # compare pips
         keys = [set(self.pips.keys()), set(other.pips.keys())]
@@ -548,7 +567,13 @@ def compare_tile(f1, f2):
     tile1 == tile2
 
     # Check Tile summary
-    assert_equal(f1.line, f2.line)
+    # This first check accounts for EXTRA_WIRE_EXCEPTION making the summay
+    # wire count be off
+    if f1.line[4] != f2.line[4]:
+        eprint(f"EXTRA_WIRE_EXCEPTION caught on line {f2.line_num}:"
+               + f"{f1.line_num} summary wire count mismatch")
+    else:
+        assert_equal(f1.line, f2.line)
 
     get_line(f1, f2)
 
@@ -608,6 +633,8 @@ def compare_xdlrc(f1, f2):
            and (f1.line[0] != XDLRC_KEY_WORD_KEYS.prim_defs)):
         compare_tile(f1, f2)
 
+    while (f2.line[0] != XDLRC_KEY_WORD_KEYS.prim_defs):
+        get_line(f2)
     compare_prim_defs(f1, f2)
 
 
@@ -667,6 +694,9 @@ if __name__ == "__main__":
 
     XDLRC_Exceptions_f = open(XDLRC_Exceptions, "w")
 
+    with open("xc7a100tcsg324_wires.json",) as f:
+        vivado = json.load(f)
+
     with (open(args.dir+args.TEST_XDLRC, "r") as f1,
           open(args.dir+args.CORRECT_XDLRC, "r") as f2,
           open(XDLRC_Exceptions, "w") as f3):
@@ -680,7 +710,7 @@ if __name__ == "__main__":
         file_init(f1, f2)
 
         start = time.time()
-        debugpy.breakpoint()
+
         if args.tile:
             compare_tile(f1, f2)
         elif args.prim_defs:
