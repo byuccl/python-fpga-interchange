@@ -42,8 +42,10 @@ found in Vivado 2020. The earliest occurance for this is tile
 TERM_CMT_X8Y208. Interchange includes information on 4 wires that
 connect to this tile for part xc7a100t. ISE's XDLRC for xc7a100tcsg-1
 does not show any wires for this tile, and there is no conn statement
-for a wire connecting to this tile in the rest of the XDLRC. Currently,
-we assume that all extra wires are an example of this case.
+for a wire connecting to this tile in the rest of the XDLRC. 
+MISSING_WIRE_EXCEPTION: Sometimes ISE prints out wires for a tile that
+are not currently represented in Vivado. These instances are marked
+appropriately.
 """
 
 
