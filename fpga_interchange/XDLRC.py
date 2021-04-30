@@ -96,7 +96,7 @@ class XDLRC(DeviceResources):
             fileName (str)  - Name of file to create/write to.  Can be
                               none for no file operations.
         """
-        print("done")
+
         if type(device_resource) is DeviceResources:
             # TODO test this feature
             self.__dict__ = device_resource.__dict__.copy()
@@ -120,7 +120,7 @@ class XDLRC(DeviceResources):
             self.tiles += tile_row
 
         # set up file to write to
-        if filename is not None:
+        if fileName is not None:
             if fileName == '':
                 fileName = self.device_resource_capnp.name + ".xdlrc"
             self.xdlrc = open(fileName, "w+")
