@@ -920,12 +920,6 @@ class DeviceResources():
         return to_logical_netlist(self.device_resource_capnp.primLibs,
                                   self.strs)
 
-    Direction_strs = ("Input", "Output", "Inout")
-
-    def Direction_to_str(dir):
-        """.logical_netlist.Direction to XDLRC direction string"""
-        return
-
     def get_constants(self):
         constants = self.device_resource_capnp.constants
 
