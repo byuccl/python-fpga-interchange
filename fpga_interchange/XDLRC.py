@@ -128,7 +128,11 @@ class XDLRC(DeviceResources):
         self.xdlrc.close()
 
     def _generate_tile(self, tile):
-        """The heavy lifting for generating xdlrc for a tile."""
+        """
+        The heavy lifting for generating xdlrc for a tile.
+
+        Returns a tuple(num_sites, num_pips)
+        """
 
         # Some pointers for abbreviated reference
         raw_repr = self.device_resource_capnp
@@ -140,8 +144,9 @@ class XDLRC(DeviceResources):
         tile_type_r = raw_repr.tileTypeList[tile_type.tile_type_index]
         wires = tile_type.wires
         pips = tile_type.pips
+        num_sites = len(tile.sites)
         xdlrc.write(f"\t(tile {tile.row} {tile.col} {tile_name} "
-                    + f"{tile_type.name} {len(tile.sites)}\n")
+                    + f"{tile_type.name} {num_sites}\n")
 
         num_wires = 0
         num_pips = len(pips)
@@ -220,17 +225,22 @@ class XDLRC(DeviceResources):
         xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
         xdlrc.write(f"{num_pinwires} {num_wires} {num_pips})\n")
         xdlrc.write(f"\t)\n")
+        return (num_sites, num_pips)
 
     def generate_tile(self, tile_name):
-        """Generate a single tile representation for tile_name (str)."""
+        """
+        Generate a single tile representation for tile_name (str).
+
+        Returns a tuple(num_sites, num_pips)
+        """
         for tile in self.tiles:
             name = self.strs[tile.name]
             if name == tile_name:
-                self._generate_tile(tile)
+                return self._generate_tile(tile)
 
     def generate_prim_defs(self):
-        """Generate the primitive_defs."""
-
+        """Generate the primitive_defs. Returns number of pins"""
+        num_pins = 0
         # some pointers for abbreviated reference
         raw_repr = self.device_resource_capnp
         xdlrc = self.xdlrc
@@ -250,12 +260,14 @@ class XDLRC(DeviceResources):
 
         for i in site_type_names:
             site_t = site_types[i]
+            # TODO Symbiflow added this to the python SiteType class
             site_t_r = raw_repr.siteTypeList[site_t.site_type_index]
             site_wires = site_t_r.siteWires
 
             xdlrc.write(f"\t(primitive_def {site_t.site_type} "
                         + f"{len(site_t.site_pins)} {len(site_t.bels)}\n")
             # PIN declaration
+            num_pins += len(site_t.site_pins.keys())
             for pin_name, pin in site_t.site_pins.items():
                 direction = pin[3].name.lower()
                 xdlrc.write(
@@ -264,6 +276,8 @@ class XDLRC(DeviceResources):
             # ELEMENT declaration
             for bel in site_t.bels:
                 xdlrc.write(f"\t\t(element {bel.name} {len(bel.bel_pins)}\n")
+                num_pins += len(bel.bel_pins)
+                # TODO Symbiflow adjusted bel pin representation in SiteType
                 for bel_pin in bel.bel_pins:
                     # PIN declaration
                     bel_pin_index = site_t.bel_pin_index[bel_pin]
@@ -296,6 +310,7 @@ class XDLRC(DeviceResources):
                                         + f"{bel_pin_name} "
                                         + f"{direction_str} {bel2_name}"
                                         + f" {bel_pin2_name})\n")
+        return num_pins  # This number is way off
 
     def generate_XDLRC(self):
         """
@@ -303,19 +318,31 @@ class XDLRC(DeviceResources):
         Generate an XDLRC file based on the DeviceResources Device.
         """
 
+        # HEADER
+        self.xdlrc.write(
+            f"(xdl_resource_report v0.2 {self.device_resource_capnp.name}\n")
+
         # TILES declaration
         num_rows = self.tiles[-1].row + 1
         num_cols = self.tiles[-1].col + 1
         self.xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
 
         # TILE declarations
+        num_sites = 0
+        num_pips = 0
         for tile in self.tiles:
-            self._generate_tile(tile)
+            tmp_sites, tmp_pips = self._generate_tile(tile)
+            num_sites += tmp_sites
+            num_pips += tmp_pips
 
         self.xdlrc.write(")\n")
 
         # PRIMITIVE_DEFS
-        self.generate_prim_defs()
+        num_pins = self.generate_prim_defs()
 
+        # SUMMARY
+        self.xdlrc.write(f"(summary tiles={len(self.tiles)} sites={num_sites} "
+                         + f"sitedefs={len(self.site_types)} "
+                         + f"numpins={num_pins} numpips={num_pips})\n)")
         # cleanup
         self.close_file()
