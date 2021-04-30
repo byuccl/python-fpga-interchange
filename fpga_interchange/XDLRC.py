@@ -1,7 +1,6 @@
 """
 Code to generate XDLRC files based on the information provided in
 RapidWright interchange DeviceResources capnp device representations.
-
 Contains class XDLRC, which extends the DeviceResources class found in
 this repository's device_resource.py. This class uses the Python
 DeviceResources object in conjunction with the Python capnproto object
@@ -9,7 +8,6 @@ to generate the information found in an ISE XDLRC file of a device.
 The XDLRC generator will print out the tile and primitive_def
 declarations in the same order as ISE; however the internal declarations
 for these data types are not the same order.
-
 There are some differences between the ISE file and XDLRC file produced
 by this code. They are outlined below:
 CFG_EXCEPTION: From what we can tell, there is no way to pull the cfg
@@ -48,11 +46,9 @@ from .logical_netlist import Direction
 class XDLRC(DeviceResources):
     """
     Class for generating XDLRC files from Interchange device resources.
-
     This class contains the main/helper routines associated with
     generating a XDLRC file.  Creating an instance of the class
     automatically will generate the XDLRC file.
-
     Constructor Parameters:
     device_rep (DeviceResources)
     file_name (String) - filename for xdlrc file (.xdlrc extension will
@@ -63,10 +59,8 @@ class XDLRC(DeviceResources):
     def __sort_tile_cols__(tile):
         """
         Helper function for sort.
-
         NOT designed for use outside of being a key function for sort().
         Helps sort() sort the tiles based on col number
-
         NOTE: self is purposely not included as the first arguement.
         """
         return tile.col
@@ -74,7 +68,6 @@ class XDLRC(DeviceResources):
     def __init__(self, device_resource, fileName=''):
         """
         Initialize the XDLRC object.
-
         Parameters:
             device_resource - Object to obtain device information from.
                               Can be instance of DeviceResources or
@@ -220,7 +213,7 @@ class XDLRC(DeviceResources):
         xdlrc = self.xdlrc
 
         # PRIMITIVE_DEFS declaration
-        xdlrc.write(f")\n (primitive_defs {len(raw_repr.siteTypeList)}\n")
+        xdlrc.write(f" (primitive_defs {len(raw_repr.siteTypeList)}\n")
 
         # PRIMITIVE_DEF declarations
         # Semantics to ensure primitive_defs are added alphabetically
@@ -272,9 +265,9 @@ class XDLRC(DeviceResources):
                             direction = convert_direction(bel_pin2_r.dir)
                             direction_str = ''
                             if direction == Direction.Input:
-                                direction_str = '<=='
-                            elif direction == Direction.Output:
                                 direction_str = '==>'
+                            elif direction == Direction.Output:
+                                direction_str = '<=='
 
                             xdlrc.write(f"\t\t\t(conn {bel.name} "
                                         + f"{bel_pin_name} "
@@ -295,6 +288,8 @@ class XDLRC(DeviceResources):
         # TILE declarations
         for tile in self.tiles:
             self._generate_tile(tile)
+
+        self.xdlrc.write(")\n")
 
         # PRIMITIVE_DEFS
         self.generate_prim_defs()
