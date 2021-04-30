@@ -53,6 +53,15 @@ from .device_resources import DeviceResources, convert_direction
 from .logical_netlist import Direction
 
 
+class DummyFile():
+    """Fake file"""
+    def write(*args, **kwargs):
+        return
+
+    def close(*args, **kwargs):
+        return
+
+
 class XDLRC(DeviceResources):
     """
     Class for generating XDLRC files from Interchange device resources.
@@ -84,8 +93,10 @@ class XDLRC(DeviceResources):
             device_resource - Object to obtain device information from.
                               Can be instance of DeviceResources or
                               interchange_capnp.read_capnp_file() output
-            fileName (str)  - Name of file to create/write to
+            fileName (str)  - Name of file to create/write to.  Can be
+                              none for no file operations.
         """
+        print("done")
         if type(device_resource) is DeviceResources:
             # TODO test this feature
             self.__dict__ = device_resource.__dict__.copy()
@@ -109,9 +120,12 @@ class XDLRC(DeviceResources):
             self.tiles += tile_row
 
         # set up file to write to
-        if fileName == '':
-            fileName = self.device_resource_capnp.name + ".xdlrc"
-        self.xdlrc = open(fileName, "w+")
+        if filename is not None:
+            if fileName == '':
+                fileName = self.device_resource_capnp.name + ".xdlrc"
+            self.xdlrc = open(fileName, "w+")
+        else:
+            self.xdlrc = DummyFile()
 
     def close_file(self):
         self.xdlrc.close()
