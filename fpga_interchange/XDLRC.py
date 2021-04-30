@@ -1,6 +1,10 @@
 """
 Code to generate XDLRC files based on the information provided in
 RapidWright interchange DeviceResources capnp device representations.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 11d2ff5285180d22279a8da1ff9c87fb80df46a2
 Contains class XDLRC, which extends the DeviceResources class found in
 this repository's device_resource.py. This class uses the Python
 DeviceResources object in conjunction with the Python capnproto object
@@ -8,6 +12,10 @@ to generate the information found in an ISE XDLRC file of a device.
 The XDLRC generator will print out the tile and primitive_def
 declarations in the same order as ISE; however the internal declarations
 for these data types are not the same order.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 11d2ff5285180d22279a8da1ff9c87fb80df46a2
 There are some differences between the ISE file and XDLRC file produced
 by this code. They are outlined below:
 CFG_EXCEPTION: From what we can tell, there is no way to pull the cfg
@@ -59,8 +67,10 @@ class XDLRC(DeviceResources):
     def __sort_tile_cols__(tile):
         """
         Helper function for sort.
+
         NOT designed for use outside of being a key function for sort().
         Helps sort() sort the tiles based on col number
+
         NOTE: self is purposely not included as the first arguement.
         """
         return tile.col
