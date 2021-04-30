@@ -18,10 +18,11 @@ XDLRC_Exceptions.txt.
 from collections import namedtuple
 import debugpy
 import enum
-import os
 import sys
 import time
 import json
+from fpga_interchange.XDLRC import XDLRC
+from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
 
 KeyWords = namedtuple(
     'KeyWords', 'comment tiles tile wire conn summary pip site pinwire prim_defs prim_def element cfg pin')  # noqa
@@ -197,13 +198,14 @@ class PinWire(namedtuple('PinWire', 'name direction wire')):
                 and (self.wire == other.wire))
 
 
-class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
+class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
     """
     Lightweight class for holding XDLRC tile information.
     __eq__() is overridden for accurate comparison.  It is important to
     note that it assumes that "other" is correct.
     Members:
         name  (str)  - Tile name
+        type  (str)  - Tile type
         wires (dict) - Key: Wire Name (str)
                        Value: Associated conns (list of tuples)
         pips  (dict) - Key: Input Wire Name (str)
@@ -233,6 +235,7 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
             err_print(f"Name1: {self.name} Name2: {other.name}\n\n")
             return False
 
+        err_header = f"Tile: {self.name} Type: {self.type}"
         # compare wires
         keys = [set(self.wires.keys()), set(other.wires.keys())]
         common_wires = keys[0].intersection(keys[1])
@@ -242,20 +245,18 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
             if wire in keys[0]:
                 if wire in vivado[self.name]['wires']:
-                    eprint(f"EXTRA_WIRE_EXCEPTION caught for tile {self.name} "
-                           + f"Wire: {wire}")
+                    eprint(f"EXTRA_WIRE_EXCEPTION {err_header} Wire: {wire}")
                 else:
+                    # Wire is not in Vivado or ISE
                     _errors += 1
-                    err_print(
-                        f"Extra wire not in Vivado tile {self.name} Wire {wire}")
+                    err_print(f"{err_header} Extra wire {wire}")
             else:
                 if wire not in vivado[self.name]['wires']:
-                    eprint(f"MISSING_WIRE_EXCEPTION caught for tile {self.name} "
-                           + f"Wire {wire}")
+                    eprint(f"MISSING_WIRE_EXCEPTION {err_header} Wire {wire}")
                 else:
+                    # Wire is in Vivado and ISE but not in interchange
                     _errors += 1
-                    err_print(
-                        f"Wire missing but in Vivado/ISE for tile {self.name} Wire {wire}")
+                    err_print(f"{err_header} Wire {wire} missing")
 
         for wire in common_wires:
             conns = self.wires[wire]
@@ -268,9 +269,8 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
                 _errors += 1
                 msg = ""
                 if wire not in vivado[self.name]['wires']:
-                    msg = "NoVivado"
-                err_print(
-                    f"Tile: {self.name} Wire conns mismatch for {wire} {msg}")
+                    msg = "Note: Wire not in Vivado"
+                err_print(f"{err_header} Wire conns mismatch for {wire} {msg}")
 
         # compare pips
         keys = [set(self.pips.keys()), set(other.pips.keys())]
@@ -280,9 +280,9 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
         for wire_in in uncommon_pips:
             _errors += 1
             if wire_in in keys[0]:
-                err_print(f"Tile: {self.name} Extra Pip {wire_in}")
+                err_print(f"{err_header} Extra Pip {wire_in}")
             else:
-                err_print(f"Tile: {self.name} Missing Pip {wire_in}")
+                err_print(f"{err_header} Missing Pip {wire_in}")
 
         for wire_in in common_pips:
             wire_outs = self.pips[wire_in]
@@ -293,8 +293,7 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
             if wire_outs != other_wire_outs:
                 _errors += 1
-                err_print(f"Tile: {self.name} "
-                          + f"Pip connection mismatch for {wire_in}")
+                err_print(f"{err_header} Pip conn mismatch for {wire_in}")
 
         # compare primitive sites
         keys = [set(self.sites.keys()), set(other.sites.keys())]
@@ -304,9 +303,9 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
         for site in uncommon_sites:
             _errors += 1
             if site in keys[0]:
-                err_print(f"Tile: {self.name} Extra Site {site}")
+                err_print(f"{err_header} Extra Site {site}")
             else:
-                err_print(f"Tile: {self.name} Missing Site {site}")
+                err_print(f"{err_header} Missing Site {site}")
 
         for site in common_sites:
             pinwires = set(self.sites[site])
@@ -314,12 +313,12 @@ class TileStruct(namedtuple('TileStruct', 'name wires pips sites')):
 
             for pw in pinwires.symmetric_difference(other_pinwires):
                 _errors += 1
-                err_print(f"Tile: {self.name} PinWire mismatch for {pw}")
+                err_print(f"{err_header} PinWire mismatch for {pw}")
 
         return tmp_err == _errors
 
 
-def build_tile_db(f, tileName):
+def build_tile_db(f, tileName, typeStr):
     """
     Build a TileStruct of a tile by scanning XDLRC f.
     Breaks on tile_summary or on EOF.
@@ -329,7 +328,8 @@ def build_tile_db(f, tileName):
         tile - TileStruct representing the tile
     """
 
-    tile = TileStruct(tileName, {}, {}, {})
+    tile = TileStruct(tileName, typeStr, {}, {}, {})
+    err_header = f"Tile: {tileName} Type: {typeStr}"
     get_line(f)
 
     while f.line and f.line[0] != XDLRC_KEY_WORD_KEYS.summary:
@@ -352,7 +352,8 @@ def build_tile_db(f, tileName):
 
         elif f.line[0] == XDLRC_KEY_WORD_KEYS.site:
             if f.line[3].upper() == XDLRC_UNSUPPORTED_WORDS[0]:
-                eprint(f"PKG_SPECIFIC_EXCEPTION caught on line {f.line_num}:")
+                eprint(
+                    f"PKG_SPECIFIC_EXCEPTION  {err_header} line {f.line_num}:")
                 f.line.remove(f.line[3])
 
             sites_key = f.line[1] + ' ' + f.line[2]
@@ -370,8 +371,7 @@ def build_tile_db(f, tileName):
         else:
             err_print("Error: build_tile_db() hit default branch")
             err_print("This should not happen if XDLRC files are equal")
-            err_print(f"Line {f.line_num}:")
-            err_print(f.line)
+            err_print(f"Line {f.line_num}: {f.line}")
             sys.exit()
 
     return tile
@@ -544,7 +544,8 @@ def build_prim_def_db(f, name):
                 eprint(f"CFG_ELEMENT_EXCEPTION caught on line {f.line_num}")
                 get_line(f)
         else:
-            err_print("Error: build_prim_def_db hit default branch")
+            err_print(f"Error: build_prim_def_db hit default branch")
+            err_print(f"Check syntax on line {f.line_num}")
             get_line(f)
 
     return prim_def
@@ -559,8 +560,8 @@ def compare_tile(f1, f2):
     # Check Tile Header
     assert_equal(f1.line, f2.line)
 
-    tile1 = build_tile_db(f1, f1.line[3])
-    tile2 = build_tile_db(f2, f2.line[3])
+    tile1 = build_tile_db(f1, f1.line[3], f1.line[4])
+    tile2 = build_tile_db(f2, f2.line[3], f2.line[4])
 
     # Check Tile contents
     # __eq__ is overridden so this line actually does stuff
@@ -570,7 +571,7 @@ def compare_tile(f1, f2):
     # This first check accounts for EXTRA_WIRE_EXCEPTION making the summay
     # wire count be off
     if f1.line[4] != f2.line[4]:
-        eprint(f"EXTRA_WIRE_EXCEPTION caught on line {f2.line_num}:"
+        eprint(f"EXTRA_WIRE_EXCEPTION line {f2.line_num}:"
                + f"{f1.line_num} summary wire count mismatch")
     else:
         assert_equal(f1.line, f2.line)
@@ -645,21 +646,13 @@ def init(fileName=''):
     Parameters:
         fileName (str) - Name of file to pass to XDLRC constructor
     """
-    import os
-
-    PACKAGE_PARENT = '..'
-    SCRIPT_DIR = os.path.dirname(os.path.realpath(
-        os.path.join(os.getcwd(), os.path.expanduser(__file__))))
-    sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR, PACKAGE_PARENT)))
-
-    from fpga_interchange.XDLRC import XDLRC
-    from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
 
     device_schema = Interchange(SCHEMA_DIR).device_resources_schema.Device
     return XDLRC(read_capnp_file(device_schema, DEVICE_FILE), fileName)
 
 
-if __name__ == "__main__":
+def argparse_setup():
+    """Setup argparse and return parsed arguements."""
     import argparse
     parser = argparse.ArgumentParser(
         description="Generate XLDRC file and check for accuracy")
@@ -680,7 +673,11 @@ if __name__ == "__main__":
                        action="store_true")
     group.add_argument("--no-gen", help="Do not generate XDLRC file",
                        action="store_true")
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = argparse_setup()
 
     if not args.no_gen and not (args.tile or args.prim_defs):
         myDevice = init(args.dir+args.TEST_XDLRC)
