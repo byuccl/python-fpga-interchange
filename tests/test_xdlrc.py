@@ -24,31 +24,33 @@ import json
 from fpga_interchange.XDLRC import XDLRC
 from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
 
-KeyWords = namedtuple(
-    'KeyWords', 'comment tiles tile wire conn summary pip site pinwire prim_defs prim_def element cfg pin')  # noqa
+KeyWords = namedtuple('KeyWords', 'comment tiles tile wire conn summary pip site pinwire prim_defs prim_def element cfg pin header tile_summary')  # noqa
 
 # Dictionary contains XDLRC declarations as keys and expected token length
 # as values
 XDLRC_KEY_WORD = {'#': 0, 'TILES': 3, 'TILE': 6, 'WIRE': 3, 'CONN': 6,
                   'TILE_SUMMARY': 6, 'PIP': 4, 'PRIMITIVE_SITE': 5,
                   'PINWIRE': 4, 'PRIMITIVE_DEFS': 2, 'PRIMITIVE_DEF': 3,
-                  'ELEMENT': 3, 'CFG': 0, 'PIN': 4}
+                  'ELEMENT': 3, 'CFG': 0, 'PIN': 4, 'XDL_RESOURCE_REPORT': 0,
+                  'SUMMARY': 6}
 
 XDLRC_UNSUPPORTED_WORDS = ['UNBONDED']
 
 XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
                                wire='WIRE', conn='CONN',
-                               summary='TILE_SUMMARY', pip='PIP',
+                               tile_summary='TILE_SUMMARY', pip='PIP',
                                site='PRIMITIVE_SITE', pinwire='PINWIRE',
                                prim_defs='PRIMITIVE_DEFS',
                                prim_def='PRIMITIVE_DEF', element='ELEMENT',
-                               cfg='CFG', pin='PIN')
+                               cfg='CFG', pin='PIN',
+                               header='XDL_RESOURCE_REPORT', summary='SUMMARY')
 
 TEST_XDLRC = 'xc7a100t.xdlrc'
 CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
 # TODO: make these paths not hard-coded
 SCHEMA_DIR = "/home/reilly/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
 DEVICE_FILE = "/home/reilly/xc7a100t.device"
+VIVADO_WIRE_DB = "/home/reilly/xc7a100tcsg324_wires.json"
 
 vivado = {}
 
@@ -128,7 +130,9 @@ def get_line(*argv):
             elif key_word == XDLRC_KEY_WORD_KEYS.cfg:  # ignore cfg lines
                 eprint(f"CFG_EXCEPTION triggered on line {f.line_num}")
 
-            elif key_word[0] != XDLRC_KEY_WORD_KEYS.comment:
+            elif (key_word[0] != XDLRC_KEY_WORD_KEYS.comment and
+                  key_word != XDLRC_KEY_WORD_KEYS.header):
+
                 # Make sure token is appropriate length
                 expected_len = XDLRC_KEY_WORD[line[0]]
                 actual_len = len(line)
@@ -332,7 +336,7 @@ def build_tile_db(f, tileName, typeStr):
     err_header = f"Tile: {tileName} Type: {typeStr}"
     get_line(f)
 
-    while f.line and f.line[0] != XDLRC_KEY_WORD_KEYS.summary:
+    while f.line and f.line[0] != XDLRC_KEY_WORD_KEYS.tile_summary:
         if f.line[0] == XDLRC_KEY_WORD_KEYS.wire:
 
             wire = f.line[1]
@@ -511,7 +515,8 @@ def build_prim_def_db(f, name):
     prim_def = PrimDef(name, {}, {})
     get_line(f)
 
-    while f.line and (f.line[0] != XDLRC_KEY_WORD_KEYS.prim_def):
+    while (f.line and (f.line[0] != XDLRC_KEY_WORD_KEYS.prim_def)
+           and f.line[0] != XDLRC_KEY_WORD_KEYS.summary):
         if f.line[0] == XDLRC_KEY_WORD_KEYS.pin:
             pin_wire = PinWire(f.line[1], Direction.convert(f.line[2]),
                                f.line[3])
@@ -590,7 +595,7 @@ def compare_prim_defs(f1, f2):
     get_line(f1, f2)
 
     # Primitive_def checks
-    while f1.line and f2.line:
+    while f1.line and f2.line and f1.line[0] != XDLRC_KEY_WORD_KEYS.summary:
 
         while f2.line[1] != f1.line[1]:  # Not all ISE prim defs represented
             eprint(f"PRIM_DEF_GENERAL_EXCEPTION caught on line {f2.line_num}."
@@ -638,6 +643,10 @@ def compare_xdlrc(f1, f2):
         get_line(f2)
     compare_prim_defs(f1, f2)
 
+    # This will fail due to PRIM_DEF_GENERAL_EXCEPTION
+    # TODO pin count is way off
+    assert_equal(f1.line, f2.line)
+
 
 def init(fileName=''):
     """
@@ -679,19 +688,20 @@ def argparse_setup():
 if __name__ == "__main__":
     args = argparse_setup()
 
-    if not args.no_gen and not (args.tile or args.prim_defs):
-        myDevice = init(args.dir+args.TEST_XDLRC)
-        start = time.time()
-        myDevice.generate_XDLRC()
-        finish = time.time() - start
-        print(f"XDLRC {args.dir+args.TEST_XDLRC} generated in {finish} sec ")
+    # if not args.no_gen and not (args.tile or args.prim_defs):
+    #     myDevice = init(args.dir+args.TEST_XDLRC)
+    #     start = time.time()
+    #     myDevice.generate_XDLRC()
+    #     finish = time.time() - start
+    #     print(f"XDLRC {args.dir+args.TEST_XDLRC} generated in {finish} sec ")
 
     if args.e:
         XDLRC_Exceptions = args.e
 
     XDLRC_Exceptions_f = open(XDLRC_Exceptions, "w")
 
-    with open("xc7a100tcsg324_wires.json",) as f:
+    # TODO make this optional
+    with open(VIVADO_WIRE_DB, "r") as f:
         vivado = json.load(f)
 
     with (open(args.dir+args.TEST_XDLRC, "r") as f1,
