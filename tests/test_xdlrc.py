@@ -53,8 +53,9 @@ DEVICE_FILE = "/home/reilly/xc7a100t.device"
 VIVADO_WIRE_DB = "/home/reilly/xc7a100tcsg324_wires.json"
 
 vivado = {}
+typeErr = {}
 
-global _errors
+# global _errors
 _errors = 0
 unknowns = []
 
@@ -253,6 +254,10 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                 else:
                     # Wire is not in Vivado or ISE
                     _errors += 1
+                    if self.type not in typeErr.keys():
+                        typeErr[self.type] = 1
+                    else:
+                        typeErr[self.type] += 1
                     err_print(f"{err_header} Extra wire {wire}")
             else:
                 if wire not in vivado[self.name]['wires']:
@@ -260,6 +265,10 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                 else:
                     # Wire is in Vivado and ISE but not in interchange
                     _errors += 1
+                    if self.type not in typeErr.keys():
+                        typeErr[self.type] = 1
+                    else:
+                        typeErr[self.type] += 1
                     err_print(f"{err_header} Wire {wire} missing")
 
         for wire in common_wires:
@@ -274,6 +283,10 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                 msg = ""
                 if wire not in vivado[self.name]['wires']:
                     msg = "Note: Wire not in Vivado"
+                if self.type not in typeErr.keys():
+                    typeErr[self.type] = 1
+                else:
+                    typeErr[self.type] += 1
                 err_print(f"{err_header} Wire conns mismatch for {wire} {msg}")
 
         # compare pips
@@ -284,8 +297,16 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
         for wire_in in uncommon_pips:
             _errors += 1
             if wire_in in keys[0]:
+                if self.type not in typeErr.keys():
+                    typeErr[self.type] = 1
+                else:
+                    typeErr[self.type] += 1
                 err_print(f"{err_header} Extra Pip {wire_in}")
             else:
+                if self.type not in typeErr.keys():
+                    typeErr[self.type] = 1
+                else:
+                    typeErr[self.type] += 1
                 err_print(f"{err_header} Missing Pip {wire_in}")
 
         for wire_in in common_pips:
@@ -297,6 +318,10 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
 
             if wire_outs != other_wire_outs:
                 _errors += 1
+                if self.type not in typeErr.keys():
+                    typeErr[self.type] = 1
+                else:
+                    typeErr[self.type] += 1
                 err_print(f"{err_header} Pip conn mismatch for {wire_in}")
 
         # compare primitive sites
@@ -307,8 +332,16 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
         for site in uncommon_sites:
             _errors += 1
             if site in keys[0]:
+                if self.type not in typeErr.keys():
+                    typeErr[self.type] = 1
+                else:
+                    typeErr[self.type] += 1
                 err_print(f"{err_header} Extra Site {site}")
             else:
+                if self.type not in typeErr.keys():
+                    typeErr[self.type] = 1
+                else:
+                    typeErr[self.type] += 1
                 err_print(f"{err_header} Missing Site {site}")
 
         for site in common_sites:
@@ -317,6 +350,10 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
 
             for pw in pinwires.symmetric_difference(other_pinwires):
                 _errors += 1
+                if self.type not in typeErr.keys():
+                    typeErr[self.type] = 1
+                else:
+                    typeErr[self.type] += 1
                 err_print(f"{err_header} PinWire mismatch for {pw}")
 
         return tmp_err == _errors
@@ -688,12 +725,12 @@ def argparse_setup():
 if __name__ == "__main__":
     args = argparse_setup()
 
-    # if not args.no_gen and not (args.tile or args.prim_defs):
-    #     myDevice = init(args.dir+args.TEST_XDLRC)
-    #     start = time.time()
-    #     myDevice.generate_XDLRC()
-    #     finish = time.time() - start
-    #     print(f"XDLRC {args.dir+args.TEST_XDLRC} generated in {finish} sec ")
+    if not args.no_gen and not (args.tile or args.prim_defs):
+        myDevice = init(args.dir+args.TEST_XDLRC)
+        start = time.time()
+        myDevice.generate_XDLRC()
+        finish = time.time() - start
+        print(f"XDLRC {args.dir+args.TEST_XDLRC} generated in {finish} sec ")
 
     if args.e:
         XDLRC_Exceptions = args.e
@@ -730,4 +767,5 @@ if __name__ == "__main__":
 
     err_print(f"Done comparing XDLRC files. Errors: {_errors}")
     print(f"Done comparing XDLRC files. Errors: {_errors}")
+    print(typeErr)
     XDLRC_Exceptions_f.close()

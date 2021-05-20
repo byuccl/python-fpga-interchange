@@ -1,10 +1,6 @@
 """
 Code to generate XDLRC files based on the information provided in
 RapidWright interchange DeviceResources capnp device representations.
-<<<<<<< HEAD
-=======
-
->>>>>>> 11d2ff5285180d22279a8da1ff9c87fb80df46a2
 Contains class XDLRC, which extends the DeviceResources class found in
 this repository's device_resource.py. This class uses the Python
 DeviceResources object in conjunction with the Python capnproto object
@@ -12,10 +8,6 @@ to generate the information found in an ISE XDLRC file of a device.
 The XDLRC generator will print out the tile and primitive_def
 declarations in the same order as ISE; however the internal declarations
 for these data types are not the same order.
-<<<<<<< HEAD
-=======
-
->>>>>>> 11d2ff5285180d22279a8da1ff9c87fb80df46a2
 There are some differences between the ISE file and XDLRC file produced
 by this code. They are outlined below:
 CFG_EXCEPTION: From what we can tell, there is no way to pull the cfg
@@ -42,7 +34,7 @@ found in Vivado 2020. The earliest occurance for this is tile
 TERM_CMT_X8Y208. Interchange includes information on 4 wires that
 connect to this tile for part xc7a100t. ISE's XDLRC for xc7a100tcsg-1
 does not show any wires for this tile, and there is no conn statement
-for a wire connecting to this tile in the rest of the XDLRC. 
+for a wire connecting to this tile in the rest of the XDLRC.
 MISSING_WIRE_EXCEPTION: Sometimes ISE prints out wires for a tile that
 are not currently represented in Vivado. These instances are marked
 appropriately.
@@ -167,8 +159,12 @@ class XDLRC(DeviceResources):
             site = self.site_name_to_site[site_name][site_t_name]
 
             site_t = self.get_site_type(site.site_type_index)
+            bond = ""
+            if (("IOB" in site_t_name) or ("IPAD" == site_t_name) or
+                    "OPAD" == site_t_name):
+                bond = "unkown "
             xdlrc.write(f"\t\t(primitive_site {site_name} {site_t_name} "
-                        + f"{len(site_t.site_pins.keys())}\n")
+                        + f"{bond}{len(site_t.site_pins.keys())}\n")
 
             # PINWIRE declaration
             # site_pin to tile_wire list
@@ -313,6 +309,8 @@ class XDLRC(DeviceResources):
                                         + f"{bel_pin_name} "
                                         + f"{direction_str} {bel2_name}"
                                         + f" {bel_pin2_name})\n")
+                xdlrc.write(f"\t\t)\n")
+            xdlrc.write(f"\t)\n")
         return num_pins  # This number is way off
 
     def generate_XDLRC(self):
@@ -322,8 +320,9 @@ class XDLRC(DeviceResources):
         """
 
         # HEADER
-        self.xdlrc.write(
-            f"(xdl_resource_report v0.2 {self.device_resource_capnp.name}\n")
+        # TODO fix the hardcoded family name
+        self.xdlrc.write(f"(xdl_resource_report v0.2 "
+                         + f"{self.device_resource_capnp.name} artix7\n")
 
         # TILES declaration
         num_rows = self.tiles[-1].row + 1
