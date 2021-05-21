@@ -276,6 +276,10 @@ class XDLRC(DeviceResources):
             for bel in site_t.bels:
                 xdlrc.write(f"\t\t(element {bel.name} {len(bel.bel_pins)}\n")
                 num_pins += len(bel.bel_pins)
+
+                # 1 is the enum for routing
+                add_cfg = [] if (bel.category == 1) else None
+
                 # TODO Symbiflow adjusted bel pin representation in SiteType
                 for bel_pin in bel.bel_pins:
                     # PIN declaration
@@ -283,8 +287,10 @@ class XDLRC(DeviceResources):
                     bel_pin_name = bel_pin_index[1]
                     bel_info = site_t.bel_pins[bel_pin_index]
                     direction = bel_info[2].name.lower()
-                    xdlrc.write(
-                        f"\t\t\t(pin {bel_pin_name} {direction})\n")
+                    xdlrc.write(f"\t\t\t(pin {bel_pin_name} {direction})\n")
+
+                    if (add_cfg is not None) and (direction == 'input'):
+                        add_cfg.append(bel_pin_name)
 
                     # CONN declaration
                     site_wire_index = bel_info[1]
@@ -309,6 +315,9 @@ class XDLRC(DeviceResources):
                                         + f"{bel_pin_name} "
                                         + f"{direction_str} {bel2_name}"
                                         + f" {bel_pin2_name})\n")
+                if add_cfg is not None:
+                    xdlrc.write(
+                        f"\t\t\t(cfg {' '.join(e for e in add_cfg)})\n")
                 xdlrc.write(f"\t\t)\n")
             xdlrc.write(f"\t)\n")
         return num_pins  # This number is way off
