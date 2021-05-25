@@ -42,6 +42,9 @@ callback: function to get the correct prefix for the feature, based on the
 """
 ExtraFeatures = namedtuple('ExtraFeatures', 'regex features callback')
 
+VCC_NET = "GLOBAL_LOGIC1"
+GND_NET = "GLOBAL_LOGIC0"
+
 
 class LutsEnum(Enum):
     LUT5 = 0
@@ -106,7 +109,6 @@ class XC7FasmGenerator(FasmGenerator):
         allowed_cell_types = ["RAMB18E1"]
         allowed_site_types = ["RAMB18E1"]
 
-        fasm_features = list()
         for cell_instance, cell_data in self.physical_cells_instances.items():
             cell_type = cell_data.cell_type
             if cell_type not in allowed_cell_types:
@@ -123,6 +125,7 @@ class XC7FasmGenerator(FasmGenerator):
 
             attributes = cell_data.attributes
 
+            fasm_features = list()
             ram_mode = attributes["RAM_MODE"]
             for attr, value in attributes.items():
                 init_param = self.device_resources.get_parameter_definition(
@@ -140,7 +143,8 @@ class XC7FasmGenerator(FasmGenerator):
                     init_str = "{len}'b{value}".format(
                         len=len(init_str_value), value=init_str_value)
                     fasm_feature = "{}[{}:0]={}".format(
-                        attr, len(init_str_value), init_str)
+                        attr,
+                        len(init_str_value) - 1, init_str)
                     fasm_features.append(fasm_feature)
 
                 elif attr in z_features:
@@ -169,15 +173,16 @@ class XC7FasmGenerator(FasmGenerator):
                     fasm_features.append("{}_{}".format(attr, init_value))
 
                     if init_value == 36 and ram_mode == "SDP":
-                        fasm_feature.append("SDP_{}_36".format(attr))
+                        fasm_features.append("SDP_{}_36".format(attr))
 
             for fasm_feature in fasm_features:
                 self.add_cell_feature((tile_name, bram_prefix, fasm_feature))
 
-            for feature in ["ALMOST_EMPTY_OFFSET", "ALMOST_FULL_OFFSET"]:
-                value = "1" * 13
-                fasm_feature = "Z{}[12:0]=13'b{}".format(feature, value)
-                self.add_cell_feature((tile_name, fasm_feature))
+            if not is_y1:
+                for feature in ["ALMOST_EMPTY_OFFSET", "ALMOST_FULL_OFFSET"]:
+                    value = "1" * 13
+                    fasm_feature = "Z{}[12:0]=13'b{}".format(feature, value)
+                    self.add_cell_feature((tile_name, fasm_feature))
 
     def handle_ios(self):
         """
@@ -351,7 +356,7 @@ class XC7FasmGenerator(FasmGenerator):
             if cell_type.startswith("LD"):
                 self.add_cell_feature((tile_name, slice_site, "LATCH"))
 
-            if cell_type in ["FDRE", "FDCE"]:
+            if cell_type in ["FDRE", "FDSE"]:
                 self.add_cell_feature((tile_name, slice_site, "FFSYNC"))
 
             init_param = self.device_resources.get_parameter_definition(
@@ -388,7 +393,8 @@ class XC7FasmGenerator(FasmGenerator):
                     self.add_cell_feature((tile_name, site_prefix, feature))
 
     def handle_slice_routing_bels(self):
-        routing_bels = self.get_routing_bels("SLICE")
+        tile_types = ["CLBLL_L", "CLBLL_R", "CLBLM_L", "CLBLM_R"]
+        routing_bels = self.get_routing_bels(tile_types)
 
         used_muxes = ["SRUSEDMUX", "CEUSEDMUX"]
 
@@ -409,7 +415,8 @@ class XC7FasmGenerator(FasmGenerator):
                 self.add_cell_feature((tile_name, slice_prefix, bel, pin))
 
     def handle_bram_routing_bels(self):
-        routing_bels = self.get_routing_bels("RAMB")
+        tile_types = ["BRAM_L", "BRAM_R"]
+        routing_bels = self.get_routing_bels(tile_types)
 
         for site, bel, pin, is_inverting in routing_bels:
             tile_name, tile_type = self.get_tile_info_at_site(site)
@@ -509,9 +516,17 @@ class XC7FasmGenerator(FasmGenerator):
             lut_enum = LutsEnum.from_str(lut_type)
             assert self.luts[lut_key][lut_enum] is None, (net_name, site, bel)
 
-            wire_lut_init = self.lut_mapper.get_phys_wire_lut_init(
-                2, site_type, "LUT1", bel, pin_name)
-            self.luts[lut_key][lut_enum] = wire_lut_init
+            if net_name == VCC_NET:
+                lut_init = self.lut_mapper.get_const_lut_init(
+                    1, site_type, bel)
+            elif net_name == GND_NET:
+                lut_init = self.lut_mapper.get_const_lut_init(
+                    0, site_type, bel)
+            else:
+                lut_init = self.lut_mapper.get_phys_wire_lut_init(
+                    2, site_type, "LUT1", bel, pin_name)
+
+            self.luts[lut_key][lut_enum] = lut_init
 
     def handle_extra_pip_features(self, extra_pip_features):
         """
@@ -600,6 +615,11 @@ class XC7FasmGenerator(FasmGenerator):
                 regex="(HCLK_CK_BUFHCLK[0-9]+)",
                 features=[""],
                 callback=lambda m: "ENABLE_BUFFER.{}".format(m.group(1))))
+        regexs.append(
+            ExtraFeatures(
+                regex="BRAM_CASCOUT_ADDR(ARD|BWR)ADDR",
+                features=[""],
+                callback=lambda m: "CASCOUT_{}_ACTIVE".format(m.group(1))))
 
         extra_wires = set()
         for tile_pips in extra_pip_features.values():
@@ -637,7 +657,7 @@ class XC7FasmGenerator(FasmGenerator):
         tile_types = [
             "HCLK_L", "HCLK_R", "HCLK_L_BOT_UTURN", "HCLK_R_BOT_UTURN",
             "HCLK_CMT", "HCLK_CMT_L", "CLK_HROW_TOP_R", "CLK_HROW_BOT_R",
-            "CLK_BUFG_REBUF"
+            "CLK_BUFG_REBUF", "BRAM_L", "BRAM_R"
         ]
         extra_pip_features = dict(
             (tile_type, set()) for tile_type in tile_types)
@@ -658,12 +678,12 @@ class XC7FasmGenerator(FasmGenerator):
         self.handle_luts()
         self.handle_slice_ff()
 
+        # Handling PIPs and Route-throughs
+        self.handle_pips()
+
         # Handling routing BELs
         self.handle_slice_routing_bels()
         self.handle_bram_routing_bels()
-
-        # Handling PIPs and Route-throughs
-        self.handle_pips()
 
         # Emit LUT features. This needs to be done at last as
         # LUT features depend also on LUT route-thru
