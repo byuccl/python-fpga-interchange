@@ -206,7 +206,7 @@ class XDLRC(DeviceResources):
                 conn_tile = self.strs[wire.tile]
                 conn_wire = self.strs[wire.wire]
 
-                if conn_wire != wire_name:
+                if (conn_wire != wire_name) or (conn_tile != tile_name):
                     xdlrc.write(f"\t\t\t(conn {conn_tile} {conn_wire})\n")
 
             xdlrc.write(f"\t\t)\n")
