@@ -249,7 +249,7 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
         for wire in uncommon_wires:
 
             if wire in keys[0]:
-                if wire in vivado[self.name]['wires']:
+                if f"{self.name}/{wire}" in vivado[self.name]['wires']:
                     eprint(f"EXTRA_WIRE_EXCEPTION {err_header} Wire: {wire}")
                 else:
                     # Wire is not in Vivado or ISE
