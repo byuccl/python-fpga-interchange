@@ -35,6 +35,9 @@ TERM_CMT_X8Y208. Interchange includes information on 4 wires that
 connect to this tile for part xc7a100t. ISE's XDLRC for xc7a100tcsg-1
 does not show any wires for this tile, and there is no conn statement
 for a wire connecting to this tile in the rest of the XDLRC.
+This also extends to wire conn statements. Naturally the "extra" wires
+are found in the conns of other matching wires. These are tagged as the
+same exception.
 MISSING_WIRE_EXCEPTION: Sometimes ISE prints out wires for a tile that
 are not currently represented in Vivado. These instances are marked
 appropriately.
@@ -159,10 +162,11 @@ class XDLRC(DeviceResources):
             site = self.site_name_to_site[site_name][site_t_name]
 
             site_t = self.get_site_type(site.site_type_index)
-            bond = ""
-            if (("IOB" in site_t_name) or ("IPAD" == site_t_name) or
-                    "OPAD" == site_t_name):
-                bond = "unkown "
+            # bond = ""
+            # if (("IOB" in site_t_name) or ("IPAD" == site_t_name) or
+            #         "OPAD" == site_t_name):
+            #     bond = "unkown "
+            bond = "unknown "  # just mark all sites as unkown for now
             xdlrc.write(f"\t\t(primitive_site {site_name} {site_t_name} "
                         + f"{bond}{len(site_t.site_pins.keys())}\n")
 
