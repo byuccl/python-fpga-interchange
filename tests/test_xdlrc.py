@@ -7,6 +7,14 @@ If an unknown declaration is encountered, the line is skipped and a
 warning is printed.
 Note: CFG is recognized as a declaration, but not supported in XDLRC
 generation so these lines are skipped without warning or error.
+Wires not found in both interchange and ISE are checked against a JSON
+database of Vivado wires. The following encoding shows where a wire can
+be found:
+    100 ISE
+    010 Interchange
+    001 Vivado
+Naturally, this leads to encodings like 101 indicating that the wire is
+found in ISE and Vivado but not interchange.
 To be ran in the tests directory of the python-fpga-interchange project
 with the command:
     $python test_xdlrc.py -m interchange
@@ -46,11 +54,12 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
                                header='XDL_RESOURCE_REPORT', summary='SUMMARY')
 
 TEST_XDLRC = 'xc7a100t.xdlrc'
-CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
+#CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
+CORRECT_XDLRC = '/home/reilly/work/fva/roundtrip.xdlrc'
 # TODO: make these paths not hard-coded
-SCHEMA_DIR = "/home/reilly/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
-DEVICE_FILE = "/home/reilly/xc7a100t.device"
-VIVADO_WIRE_DB = "/home/reilly/xc7a100tcsg324_wires.json"
+SCHEMA_DIR = "/home/reilly/work/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
+DEVICE_FILE = "/home/reilly/work/xc7a100t.device"
+VIVADO_WIRE_DB = "/home/reilly/work/xc7a100tcsg324_wires.json"
 
 vivado = {}
 typeErr = {}
@@ -120,7 +129,7 @@ def get_line(*argv):
                 continue
             line = line.upper().split()
             key_word = line[0]
-            if key_word not in XDLRC_KEY_WORD_KEYS:
+            if key_word not in XDLRC_KEY_WORD_KEYS and key_word[0] != XDLRC_KEY_WORD_KEYS.comment:
                 if line[0] not in unknowns:
                     print(f"Warning: Unknown Key word {line[0]}. Ignoring line"
                           + f" {f.line_num}")
@@ -242,7 +251,7 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
 
         err_header = f"Tile: {self.name} Type: {self.type}"
         # compare wires
-        keys = [set(self.wires.keys()), set(other.wires.keys())]
+        keys = (set(self.wires.keys()), set(other.wires.keys()))
         common_wires = keys[0].intersection(keys[1])
         uncommon_wires = keys[0].symmetric_difference(keys[1])
 
@@ -250,7 +259,8 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
 
             if wire in keys[0]:
                 if f"{self.name}/{wire}" in vivado[self.name]['wires']:
-                    eprint(f"EXTRA_WIRE_EXCEPTION {err_header} Wire: {wire}")
+                    eprint(
+                        f"EXTRA_WIRE_EXCEPTION 011 {err_header} Wire: {wire}")
                 else:
                     # Wire is not in Vivado or ISE
                     _errors += 1
@@ -258,10 +268,11 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                         typeErr[self.type] = 1
                     else:
                         typeErr[self.type] += 1
-                    err_print(f"{err_header} Extra wire {wire}")
+                    err_print(f"{err_header} Extra wire 010 {wire}")
             else:
-                if wire not in vivado[self.name]['wires']:
-                    eprint(f"MISSING_WIRE_EXCEPTION {err_header} Wire {wire}")
+                if f"{self.name}/{wire}" not in vivado[self.name]['wires']:
+                    eprint(
+                        f"MISSING_WIRE_EXCEPTION 100 {err_header} Wire {wire}")
                 else:
                     # Wire is in Vivado and ISE but not in interchange
                     _errors += 1
@@ -269,25 +280,40 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                         typeErr[self.type] = 1
                     else:
                         typeErr[self.type] += 1
-                    err_print(f"{err_header} Wire {wire} missing")
+                    err_print(f"{err_header} Missing Wire 101: {wire}")
 
         for wire in common_wires:
             conns = self.wires[wire]
             other_conns = other.wires[wire]
 
-            conns.sort()
-            other_conns.sort()
+            all_conns = (set(conns), set(other_conns))
+            uncommon = all_conns[0].symmetric_difference(all_conns[1])
 
-            if conns != other_conns:
-                _errors += 1
-                msg = ""
-                if wire not in vivado[self.name]['wires']:
-                    msg = "Note: Wire not in Vivado"
-                if self.type not in typeErr.keys():
-                    typeErr[self.type] = 1
+            for conn in uncommon:
+                if f"{conn[0]}/{conn[1]}" in vivado[conn[0]]["wires"]:
+                    if conn in all_conns[0]:
+                        eprint(f"EXTRA_WIRE_EXCEPTION (Conn 011) {err_header} "
+                               + "Wire: {wire} Conn: {conn}")
+                    else:
+                        _errors += 1
+                        if self.type not in typeErr.keys():
+                            typeErr[self.type] = 1
+                        else:
+                            typeErr[self.type] += 1
+                            err_print(f"{err_header} Missing conn {conn} for "
+                                      + "wire {wire} 101")
                 else:
-                    typeErr[self.type] += 1
-                err_print(f"{err_header} Wire conns mismatch for {wire} {msg}")
+                    _errors += 1
+                    if self.type not in typeErr.keys():
+                        typeErr[self.type] = 1
+                    else:
+                        typeErr[self.type] += 1
+                    if conn in all_conns[0]:
+                        err_print(f"{err_header} Extra conn {conn} for wire "
+                                  + "{wire} 010")
+                    else:
+                        err_print(f"{err_header} Missing conn {conn} for wire "
+                                  + "{wire} 100")
 
         # compare pips
         keys = [set(self.pips.keys()), set(other.pips.keys())]

@@ -291,6 +291,8 @@ class XDLRC(DeviceResources):
                     bel_pin_name = bel_pin_index[1]
                     bel_info = site_t.bel_pins[bel_pin_index]
                     direction = bel_info[2].name.lower()
+                    if direction == 'inout':
+                        direction = 'input'
                     xdlrc.write(f"\t\t\t(pin {bel_pin_name} {direction})\n")
 
                     if (add_cfg is not None) and (direction == 'input'):
@@ -302,18 +304,24 @@ class XDLRC(DeviceResources):
                     if site_wire_index is None:
                         # sometimes an element pin has no conn statements
                         continue
+
+                    if direction == 'input':
+                        direction_str = '<=='
+                    else:
+                        direction_str = '==>'
+
                     for pin_idx in site_wires[site_wire_index].pins:
                         bel_pin2_r = site_t_r.belPins[pin_idx]
                         bel2_name = self.strs[bel_pin2_r.bel]
                         if bel2_name != bel.name:
                             bel_pin2_name = self.strs[bel_pin2_r.name]
 
-                            direction = convert_direction(bel_pin2_r.dir)
-                            direction_str = ''
-                            if direction == Direction.Input:
-                                direction_str = '==>'
-                            elif direction == Direction.Output:
-                                direction_str = '<=='
+                            # direction = convert_direction(bel_pin2_r.dir)
+                            # direction_str = ''
+                            # if direction == Direction.Input:
+                            #     direction_str = '==>'
+                            # elif direction == Direction.Output:
+                            #     direction_str = '<=='
 
                             xdlrc.write(f"\t\t\t(conn {bel.name} "
                                         + f"{bel_pin_name} "
@@ -324,6 +332,7 @@ class XDLRC(DeviceResources):
                         f"\t\t\t(cfg {' '.join(e for e in add_cfg)})\n")
                 xdlrc.write(f"\t\t)\n")
             xdlrc.write(f"\t)\n")
+        xdlrc.write(f")\n")
         return num_pins  # This number is way off
 
     def generate_XDLRC(self):
