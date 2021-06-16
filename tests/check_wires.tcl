@@ -1,5 +1,8 @@
 # Requires valid Vivado project for part xc7a100tcsg324-1 with synthesis and
 # implementation runs completed.
+# An empty file called "wire_check_results.txt" is expected. If the file is not
+# empty, then it lists wires that do have nodes, but are only found in ISE. These
+# wires are listed in the format tile/wire, with one on each line.
 
 # project location goes here
 open_project {C:/Users/reill/OneDrive - BYU/Documents/PhD/XDLRC/ExamplePrjXC7A100T/project_1/project_1.xpr}
@@ -9,7 +12,7 @@ open_run impl_1
 # source the array of wires output from test_xdlrc
 source WireArray.tcl
 
-proc tile_wires_to_json {file_name inputArray} { 
+proc check_wires {file_name inputArray} { 
     set f [open $file_name w]
     set tile_list [get_tiles]
     set tile_count [llength $tile_list]
@@ -26,11 +29,7 @@ proc tile_wires_to_json {file_name inputArray} {
 				if {[llength $node] != 0} {
                     # wires that do have a node will be printed to the file
                     # if the run is successful, the file should be empty
-					if { $j==[expr {$wire_count-1} ]} {
-						puts $f "\"$wire\""
-					} else {
-						puts $f "\"$wire\","
-					}
+					puts $f "\"$wire\""
 				}
 			}
         }        
@@ -38,4 +37,4 @@ proc tile_wires_to_json {file_name inputArray} {
     close $f
 }
 
-tile_wires_to_json "wire_check_results" testWires
+check_wires "wire_check_results.txt" testWires
