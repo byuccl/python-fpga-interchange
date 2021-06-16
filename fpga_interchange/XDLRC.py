@@ -221,8 +221,14 @@ class XDLRC(DeviceResources):
 
         # PIP declaration
         for p in pips:
-            xdlrc.write(f"\t\t(pip {tile_name} {self.strs[wires[p.wire0]]} ->"
-                        + f" {self.strs[wires[p.wire1]]})\n")
+            if p.directional:
+                xdlrc.write(f"\t\t(pip {tile_name} {self.strs[wires[p.wire0]]}"
+                            + f" -> {self.strs[wires[p.wire1]]})\n")
+            else:
+                xdlrc.write(f"\t\t(pip {tile_name} {self.strs[wires[p.wire0]]}"
+                            + f" =- {self.strs[wires[p.wire1]]})\n")
+                xdlrc.write(f"\t\t(pip {tile_name} {self.strs[wires[p.wire1]]}"
+                            + f" =- {self.strs[wires[p.wire0]]})\n")
 
         # TILE_SUMMARY declaration
         xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
