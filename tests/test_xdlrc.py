@@ -54,12 +54,17 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
                                header='XDL_RESOURCE_REPORT', summary='SUMMARY')
 
 TEST_XDLRC = 'xc7a100t.xdlrc'
-#CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
-CORRECT_XDLRC = '/home/reilly/work/fva/roundtrip.xdlrc'
+CORRECT_XDLRC = '/home/reilly/work/xc7a100t.xdlrc'
 # TODO: make these paths not hard-coded
 SCHEMA_DIR = "/home/reilly/work/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
 DEVICE_FILE = "/home/reilly/work/xc7a100t.device"
-VIVADO_WIRE_DB = "/home/reilly/work/xc7a100tcsg324_wires.json"
+VIVADO_WIRES = "/home/reilly/work/xc7a100tcsg324_wires.json"
+VIVADO_NODELESS_WIRES = "/home/reilly/work/xc7a100tcsg324_nodeless_wires.json"
+TCL_FILE_OUT = "WireArray.tcl"
+TCL_F = None
+
+def tcl_print(tcl):
+    TCL_F.write(tcl)
 
 vivado = {}
 typeErr = {}
@@ -67,6 +72,8 @@ typeErr = {}
 # global _errors
 _errors = 0
 unknowns = []
+
+
 
 
 def err_print(*args, **kwargs):
@@ -275,12 +282,18 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                         f"MISSING_WIRE_EXCEPTION 100 {err_header} Wire {wire}")
                 else:
                     # Wire is in Vivado and ISE but not in interchange
-                    _errors += 1
-                    if self.type not in typeErr.keys():
-                        typeErr[self.type] = 1
-                    else:
-                        typeErr[self.type] += 1
-                    err_print(f"{err_header} Missing Wire 101: {wire}")
+                    # if f"{self.name}/{wire}" not in vivado_nodeless[self.name]['wires']:
+                    #     tcl_print(f' "{self.name}/{wire}"')
+                    #     _errors += 1
+                    #     if self.type not in typeErr.keys():
+                    #         typeErr[self.type] = 1
+                    #     else:
+                    #         typeErr[self.type] += 1
+                    #     err_print(f"{err_header} Missing Wire 101: {wire}")
+                    # else:
+
+                    # TCL script was used to verify that all wires here fall under this category
+                    eprint(f"NODELESS_WIRE_EXCEPTION 101 {err_header} Wire {wire}")
 
         for wire in common_wires:
             conns = self.wires[wire]
@@ -764,18 +777,26 @@ if __name__ == "__main__":
     XDLRC_Exceptions_f = open(XDLRC_Exceptions, "w")
 
     # TODO make this optional
-    with open(VIVADO_WIRE_DB, "r") as f:
+    with open(VIVADO_WIRES, "r") as f:
         vivado = json.load(f)
+
+    with open(VIVADO_NODELESS_WIRES, "r") as f:
+        vivado_nodeless = json.load(f)
 
     with (open(args.dir+args.TEST_XDLRC, "r") as f1,
           open(args.dir+args.CORRECT_XDLRC, "r") as f2,
-          open(XDLRC_Exceptions, "w") as f3):
+          open(XDLRC_Exceptions, "w") as f3,
+          open(TCL_FILE_OUT, "w") as f4):
 
         XDLRC_Exceptions_f = f3
         eprint("Line numbers are expressed CORRECT_XDLRC:TEST_XDLRC")
         eprint("Some errors are not applicable to both files. These are "
                + "expressed with the appropriate side of the colon empty.")
         eprint("See XDLRC.py for further explanation of file contents\n\n\n")
+
+        
+        TCL_F = f4
+        tcl_print('array set testWires {')
 
         file_init(f1, f2)
 
@@ -791,7 +812,8 @@ if __name__ == "__main__":
         finish = time.time() - start
         print(f"XDLRC compared in {finish} seconds")
 
+        tcl_print("}\n")
+
     err_print(f"Done comparing XDLRC files. Errors: {_errors}")
     print(f"Done comparing XDLRC files. Errors: {_errors}")
     print(typeErr)
-    XDLRC_Exceptions_f.close()
