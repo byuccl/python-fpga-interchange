@@ -425,9 +425,9 @@ def build_tile_db(f, tileName, typeStr):
                 get_line(f)
 
         elif f.line[0] == XDLRC_KEY_WORD_KEYS.pip:
-            if f.line[1] not in tile.pips.keys():
-                tile.pips[f.line[1]] = []
-            tile.pips[f.line[1]].append(f.line[3])
+            if f.line[2] not in tile.pips.keys():
+                tile.pips[f.line[2]] = []
+            tile.pips[f.line[2]].append(f.line[3])
             get_line(f)
 
         elif f.line[0] == XDLRC_KEY_WORD_KEYS.site:
