@@ -58,6 +58,7 @@ CORRECT_XDLRC = '/home/reilly/work/xc7a100t.xdlrc'
 # TODO: make these paths not hard-coded
 SCHEMA_DIR = "/home/reilly/work/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
 DEVICE_FILE = "/home/reilly/work/xc7a100t.device"
+VIVADO_INFO = "/home/reilly/work/xc7a100tcsg324_info.json"
 VIVADO_WIRES = "/home/reilly/work/xc7a100tcsg324_wires.json"
 VIVADO_NODELESS_WIRES = "/home/reilly/work/xc7a100tcsg324_nodeless_wires.json"
 VIVADO_PIPS = "/home/reilly/work/xc7a100tcsg324_pips.json"
@@ -67,6 +68,19 @@ TCL_F = None
 
 def tcl_print(tcl):
     TCL_F.write(tcl)
+
+
+vivado = {}
+
+
+def vivado_pip(tile, wire0, wire1):
+    """Check if pip exists in Vivado"""
+    return (f"{wire0} {wire1}" in vivado[tile]["pips"])
+
+
+def vivado_wire(tile, wire):
+    """Check if wire exists in Vivado"""
+    return (f"{tile}/{wire}" in vivado[tile]['wires'])
 
 
 vivado_wires = {}
@@ -267,7 +281,7 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
         for wire in uncommon_wires:
 
             if wire in keys[0]:
-                if f"{self.name}/{wire}" in vivado_wires[self.name]['wires']:
+                if vivado_wire(self.name, wire):
                     eprint(
                         f"EXTRA_WIRE_EXCEPTION 011 {err_header} Wire: {wire}")
                 else:
@@ -279,24 +293,18 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                         typeErr[self.type] += 1
                     err_print(f"{err_header} Extra wire 010 {wire}")
             else:
-                if f"{self.name}/{wire}" not in vivado_wires[self.name]['wires']:
-                    eprint(
-                        f"MISSING_WIRE_EXCEPTION 100 {err_header} Wire {wire}")
-                else:
-                    # Wire is in Vivado and ISE but not in interchange
-                    # if f"{self.name}/{wire}" not in vivado_wires_nodeless[self.name]['wires']:
-                    #     tcl_print(f' "{self.name}/{wire}"')
-                    #     _errors += 1
-                    #     if self.type not in typeErr.keys():
-                    #         typeErr[self.type] = 1
-                    #     else:
-                    #         typeErr[self.type] += 1
-                    #     err_print(f"{err_header} Missing Wire 101: {wire}")
-                    # else:
-
-                    # TCL script was used to verify that all wires here fall under this category
+                if vivado_wire(self.name, wire):
+                    # Wire is in Vivado, ISE, and interchange but Vivado and
+                    # interchange do not document any nodes, so the conns
+                    # cannot be properly generated.
+                    # TCL script was used to verify that all wires here fall
+                    # under this category
                     eprint(
                         f"NODELESS_WIRE_EXCEPTION 101 {err_header} Wire {wire}")
+                else:
+                    # Wire is only in ISE
+                    eprint(
+                        f"MISSING_WIRE_EXCEPTION 100 {err_header} Wire {wire}")
 
         for wire in common_wires:
             conns = self.wires[wire]
@@ -306,7 +314,7 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
             uncommon = all_conns[0].symmetric_difference(all_conns[1])
 
             for conn in uncommon:
-                if f"{conn[0]}/{conn[1]}" in vivado_wires[conn[0]]["wires"]:
+                if vivado_wire(conn[0], conn[1]):
                     if conn in all_conns[0]:
                         eprint(f"EXTRA_WIRE_EXCEPTION (Conn 011) {err_header} "
                                + "Wire: {wire} Conn: {conn}")
@@ -338,27 +346,28 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
 
         for wire_in in uncommon_pips:
             if wire_in in keys[0]:
-                if f"{wire_in} {self.pips[wire_in][0]}" in vivado_pips[self.name]["pips"]:
-                    eprint(
-                        f"EXTRA_PIP_EXCEPTION 011 {err_header} Pip wire0: {wire_in}")
+                if vivado_pip(self.name, wire_in, self.pips[wire_in][0]):
+                    eprint(f"EXTRA_PIP_EXCEPTION 011 {err_header} "
+                           + f"Pip {wire_in} {self.pips[wire_in]}")
                 else:
                     _errors += 1
                     if self.type not in typeErr.keys():
                         typeErr[self.type] = 1
                     else:
                         typeErr[self.type] += 1
-                    err_print(f"{err_header} Extra Pip {wire_in}")
+                    err_print(f"{err_header} Extra Pip {wire_in} "
+                              + f"{self.pips[wire_in]}")
             else:
-                if f"{wire_in} {other.pips[wire_in][0]}" not in vivado_pips[self.name]["pips"]:
-                    eprint(
-                        f"MISSING_PIP_EXCEPTION 100 {err_header} Pip wire0: {wire_in}")
-                else:
+                if vivado_pip(self.name, wire_in, other.pips[wire_in][0]):
                     _errors += 1
                     if self.type not in typeErr.keys():
                         typeErr[self.type] = 1
                     else:
                         typeErr[self.type] += 1
                     err_print(f"{err_header} Missing Pip {wire_in}")
+                else:
+                    eprint(
+                        f"MISSING_PIP_EXCEPTION 100 {err_header} Pip wire0: {wire_in}")
 
         for wire_in in common_pips:
             wire_outs = self.pips[wire_in]
@@ -368,12 +377,20 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
             other_wire_outs.sort()
 
             if wire_outs != other_wire_outs:
-                _errors += 1
-                if self.type not in typeErr.keys():
-                    typeErr[self.type] = 1
-                else:
-                    typeErr[self.type] += 1
-                err_print(f"{err_header} Pip conn mismatch for {wire_in}")
+                conns = [set(wire_outs), set(other_wire_outs)]
+                diffs = conns[0].symmetric_difference(other_wire_outs)
+                for conn in diffs:
+                    if conn in conns[0] and vivado_wire(self.name, conn):
+                        eprint(f"EXTRA_WIRE_EXCEPTION 011 {err_header}"
+                               + f"Pip: {wire_in} {conn}")
+                    else:
+                        _errors += 1
+                        if self.type not in typeErr.keys():
+                            typeErr[self.type] = 1
+                        else:
+                            typeErr[self.type] += 1
+                        err_print(f"{err_header} Pip conn missing for pip"
+                                  + f"{wire_in} {conn}")
 
         # compare primitive sites
         keys = [set(self.sites.keys()), set(other.sites.keys())]
@@ -797,6 +814,9 @@ if __name__ == "__main__":
 
     with open(VIVADO_PIPS, "r") as f:
         vivado_pips = json.load(f)
+
+    with open(VIVADO_INFO, "r") as f:
+        vivado = json.load(f)
 
     with (open(args.dir+args.TEST_XDLRC, "r") as f1,
           open(args.dir+args.CORRECT_XDLRC, "r") as f2,
