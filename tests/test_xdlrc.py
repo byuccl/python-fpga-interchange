@@ -54,14 +54,12 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
                                header='XDL_RESOURCE_REPORT', summary='SUMMARY')
 
 TEST_XDLRC = 'xc7a100t.xdlrc'
-CORRECT_XDLRC = '/home/reilly/work/xc7a100t.xdlrc'
+CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
 # TODO: make these paths not hard-coded
-SCHEMA_DIR = "/home/reilly/work/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
-DEVICE_FILE = "/home/reilly/work/xc7a100t.device"
-VIVADO_INFO = "/home/reilly/work/xc7a100tcsg324_info.json"
-VIVADO_WIRES = "/home/reilly/work/xc7a100tcsg324_wires.json"
-VIVADO_NODELESS_WIRES = "/home/reilly/work/xc7a100tcsg324_nodeless_wires.json"
-VIVADO_PIPS = "/home/reilly/work/xc7a100tcsg324_pips.json"
+SCHEMA_DIR = "/home/reilly/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
+DEVICE_FILE = "/home/reilly/xc7a100t.device"
+VIVADO_INFO = "/home/reilly/xc7a100tcsg324_info.json"
+VIVADO_NODELESS_WIRES = "/home/reilly/xc7a100tcsg324_nodeless_wires.json"
 TCL_FILE_OUT = "WireArray.tcl"
 TCL_F = None
 
@@ -806,14 +804,8 @@ if __name__ == "__main__":
     XDLRC_Exceptions_f = open(XDLRC_Exceptions, "w")
 
     # TODO make this optional
-    with open(VIVADO_WIRES, "r") as f:
-        vivado_wires = json.load(f)
-
     with open(VIVADO_NODELESS_WIRES, "r") as f:
         vivado_wires_nodeless = json.load(f)
-
-    with open(VIVADO_PIPS, "r") as f:
-        vivado_pips = json.load(f)
 
     with open(VIVADO_INFO, "r") as f:
         vivado = json.load(f)
