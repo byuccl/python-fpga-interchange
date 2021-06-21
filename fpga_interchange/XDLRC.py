@@ -135,10 +135,11 @@ class XDLRC(DeviceResources):
     def generate_alt_site_types(self):
         for site in self.device_resource_capnp.siteTypeList:
             if len(site.altSiteTypes) != 0:
-                self.xdlrc.write(f"(alternate_site_types {d.strs[site.name]}")
+                self.xdlrc.write(
+                    f"(alternate_site_types {self.strs[site.name]}")
                 for alt in site.altSiteTypes:
                     name = self.device_resource_capnp.siteTypeList[alt].name
-                    self.xdlrc.write(f" {d.strs[name]}")
+                    self.xdlrc.write(f" {self.strs[name]}")
                 self.xdlrc.write(f")\n")
 
     def _generate_tile(self, tile):
