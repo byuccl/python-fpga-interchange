@@ -42,6 +42,9 @@ tagged with the same exception.
 MISSING_WIRE_EXCEPTION: Sometimes ISE prints out wires for a tile that
 are not currently represented in Vivado.  These instances are marked
 appropriately.
+EXTRA_INTERCHANGE_PIP_EXCEPTION: Sometimes a pip appears where one of the wires is
+documented by interchange and Vivado but not ISE. However, neither ISE
+or Vivado mention the pip.
 """
 
 
@@ -82,7 +85,7 @@ class XDLRC(DeviceResources):
         """
         return tile.col
 
-    def __init__(self, device_resource, fileName=''):
+    def __init__(self, device_resource, fileName='', family="artix7"):
         """
         Initialize the XDLRC object.
         Parameters:
@@ -123,8 +126,20 @@ class XDLRC(DeviceResources):
         else:
             self.xdlrc = DummyFile()
 
+        # set family
+        self.family = family
+
     def close_file(self):
         self.xdlrc.close()
+
+    def generate_alt_site_types(self):
+        for site in self.device_resource_capnp.siteTypeList:
+            if len(site.altSiteTypes) != 0:
+                self.xdlrc.write(f"(alternate_site_types {d.strs[site.name]}")
+                for alt in site.altSiteTypes:
+                    name = self.device_resource_capnp.siteTypeList[alt].name
+                    self.xdlrc.write(f" {d.strs[name]}")
+                self.xdlrc.write(f")\n")
 
     def _generate_tile(self, tile):
         """
@@ -349,9 +364,8 @@ class XDLRC(DeviceResources):
         """
 
         # HEADER
-        # TODO fix the hardcoded family name
         self.xdlrc.write(f"(xdl_resource_report v0.2 "
-                         + f"{self.device_resource_capnp.name} artix7\n")
+                         + f"{self.device_resource_capnp.name} {self.family}\n")
 
         # TILES declaration
         num_rows = self.tiles[-1].row + 1
@@ -377,3 +391,40 @@ class XDLRC(DeviceResources):
                          + f"numpins={num_pins} numpips={num_pips})\n)")
         # cleanup
         self.close_file()
+
+    def generate_XDLRC_PLUS(self):
+        # HEADER
+        self.xdlrc.write(f"(xdl_resource_report v0.2 "
+                         + f"{self.device_resource_capnp.name} {self.family}\n")
+
+        # ALTERNATE_SITE_TYPES
+        self.generate_alt_site_types()
+
+        # TILES declaration
+        num_rows = self.tiles[-1].row + 1
+        num_cols = self.tiles[-1].col + 1
+        self.xdlrc.write(f"(tiles {num_rows} {num_cols}\n")
+
+        # TILE declarations
+        num_sites = 0
+        num_pips = 0
+        for tile in self.tiles:
+            tmp_sites, tmp_pips = self._generate_tile(tile)
+            num_sites += tmp_sites
+            num_pips += tmp_pips
+
+        self.xdlrc.write(")\n")
+
+        # PRIMITIVE_DEFS
+        num_pins = self.generate_prim_defs()
+
+        # SUMMARY
+        self.xdlrc.write(f"(summary tiles={len(self.tiles)} sites={num_sites} "
+                         + f"sitedefs={len(self.site_types)} "
+                         + f"numpins={num_pins} numpips={num_pips})\n)")
+        # cleanup
+        self.close_file()
+
+
+if __name__ == "__main__":
+    pass
