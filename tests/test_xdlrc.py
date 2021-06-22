@@ -23,7 +23,7 @@ tracked separately from errors and stored in the text file
 XDLRC_Exceptions.txt.
 """
 
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 import debugpy
 import enum
 import sys
@@ -79,6 +79,11 @@ def vivado_pip(tile, wire0, wire1):
 def vivado_wire(tile, wire):
     """Check if wire exists in Vivado"""
     return (f"{tile}/{wire}" in vivado[tile]['wires'])
+
+
+def vivado_site(tile, site):
+    """Check if site exists in Vivado"""
+    return (f"{site}" in vivado[tile]["sites"])
 
 
 vivado_wires = {}
@@ -239,14 +244,14 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
     __eq__() is overridden for accurate comparison.  It is important to
     note that it assumes that "other" is correct.
     Members:
-        name  (str)  - Tile name
-        type  (str)  - Tile type
-        wires (dict) - Key: Wire Name (str)
-                       Value: Associated conns (list of tuples)
-        pips  (dict) - Key: Input Wire Name (str)
-                       Value: Output Wire names (list of str)
-        sites (dict) - Key: Site Name + ' ' + Site Type (str)
-                       Value: PinWires (list of PinWire)
+        name  (str)         - Tile name
+        type  (str)         - Tile type
+        wires (dict)        - Key: Wire Name (str)
+                              Value: Associated conns (list of tuples)
+        pips  (dict)        - Key: Input Wire Name (str)
+                              Value: Output Wire names (list of str)
+        sites (OrderedDict) - Key: Site Name + ' ' + Site Type (str)
+                              Value: PinWires (list of PinWire)
     """
 
     def __eq__(self, other):
@@ -348,13 +353,20 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                     eprint(f"EXTRA_PIP_EXCEPTION 011 {err_header} "
                            + f"Pip {wire_in} {self.pips[wire_in]}")
                 else:
-                    _errors += 1
-                    if self.type not in typeErr.keys():
-                        typeErr[self.type] = 1
+                    pip_conns = self.pips[wire_in]
+                    if (len(pip_conns) == 1
+                        and vivado_wire(self.name, wire_in)
+                            and vivado_wire(self.name, pip_conns[0])):
+                        eprint(f"EXTRA_INTERCHANGE_PIP_EXCEPTION {err_header} "
+                               + f"Pip 001: {wire_in} {pip_conns} (wires 011)")
                     else:
-                        typeErr[self.type] += 1
-                    err_print(f"{err_header} Extra Pip {wire_in} "
-                              + f"{self.pips[wire_in]}")
+                        _errors += 1
+                        if self.type not in typeErr.keys():
+                            typeErr[self.type] = 1
+                        else:
+                            typeErr[self.type] += 1
+                        err_print(f"{err_header} Extra Pip {wire_in} "
+                                  + f"{self.pips[wire_in]}")
             else:
                 if vivado_pip(self.name, wire_in, other.pips[wire_in][0]):
                     _errors += 1
@@ -391,24 +403,34 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                                   + f"{wire_in} {conn}")
 
         # compare primitive sites
-        keys = [set(self.sites.keys()), set(other.sites.keys())]
-        common_sites = keys[0].intersection(keys[1])
-        uncommon_sites = keys[0].symmetric_difference(keys[1])
+        common_sites = set()
+        if len(self.sites.keys()) != len(other.sites.keys()):
+            keys = [set(self.sites.keys()), set(other.sites.keys())]
+            common_sites = keys[0].intersection(keys[1])
+            uncommon_sites = keys[0].symmetric_difference(keys[1])
 
-        for site in uncommon_sites:
-            _errors += 1
-            if site in keys[0]:
-                if self.type not in typeErr.keys():
-                    typeErr[self.type] = 1
+            for site in uncommon_sites:
+                _errors += 1
+                if site in keys[0]:
+
+                    if self.type not in typeErr.keys():
+                        typeErr[self.type] = 1
+                    else:
+                        typeErr[self.type] += 1
+                    err_print(f"{err_header} Extra Site {site}")
                 else:
-                    typeErr[self.type] += 1
-                err_print(f"{err_header} Extra Site {site}")
-            else:
-                if self.type not in typeErr.keys():
-                    typeErr[self.type] = 1
-                else:
-                    typeErr[self.type] += 1
-                err_print(f"{err_header} Missing Site {site}")
+                    if self.type not in typeErr.keys():
+                        typeErr[self.type] = 1
+                    else:
+                        typeErr[self.type] += 1
+                    err_print(f"{err_header} Missing Site {site}")
+        else:
+            for site0, site1 in zip(self.sites.items(), other.sites.items()):
+                if site0[0] == site1[0]:
+                    common_sites.add(site0[0])
+                elif vivado_site(self.name, site0[0]):
+                    other.sites[site0[0]] = site1[1]
+                    common_sites.add(site0[0])
 
         for site in common_sites:
             pinwires = set(self.sites[site])
@@ -435,7 +457,7 @@ def build_tile_db(f, tileName, typeStr):
         tile - TileStruct representing the tile
     """
 
-    tile = TileStruct(tileName, typeStr, {}, {}, {})
+    tile = TileStruct(tileName, typeStr, {}, {}, OrderedDict())
     err_header = f"Tile: {tileName} Type: {typeStr}"
     get_line(f)
 
