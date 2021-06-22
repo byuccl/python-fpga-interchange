@@ -47,9 +47,9 @@ documented by interchange and Vivado but not ISE. However, neither ISE
 or Vivado mention the pip.
 """
 
-
-from .device_resources import DeviceResources, convert_direction
-from .logical_netlist import Direction
+from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
+from fpga_interchange.device_resources import DeviceResources, convert_direction
+from fpga_interchange.logical_netlist import Direction
 
 
 class DummyFile():
@@ -427,5 +427,40 @@ class XDLRC(DeviceResources):
         self.close_file()
 
 
+def argparse_setup():
+    """Setup argparse and return parsed arguements."""
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Generate XLDRC file and check for accuracy")
+    parser.add_argument("SCHEMA", help="Location of CapnProto Device Schema")
+    parser.add_argument("DEVICE",
+                        help="Interchange-CapnProto device representation")
+    parser.add_argument("FAMILY", help="The family of the part")
+    parser.add_argument("FILE", help="Name of output XDLRC file",
+                        nargs='?', default="")
+    parser.add_argument("-x", "--extra", help="Generate XDLRC+ file",
+                        action="store_true")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "-t", "--tile", help="Generate XDLRC for a single tile")
+    group.add_argument("-p", "--prim-defs",
+                       help="Generate XDLRC for Primitive_Defs only", action="store_true")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    pass
+    args = argparse_setup()
+
+    device_schema = Interchange(args.SCHEMA).device_resources_schema.Device
+    device = XDLRC(read_capnp_file(device_schema, args.DEVICE), args.FILE)
+
+    if args.tile:
+        device.generate_tile(args.tile)
+        device.close_file()
+    elif args.prim_defs:
+        device.generate_prim_defs()
+        device.close_file()
+    elif args.extra:
+        device.generate_XDLRC_PLUS()
+    else:
+        device.generate_XDLRC()
