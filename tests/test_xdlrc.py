@@ -29,7 +29,7 @@ import enum
 import sys
 import time
 import json
-from fpga_interchange.XDLRC import XDLRC
+from fpga_interchange.XDLRC.XDLRC import XDLRC
 from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
 
 KeyWords = namedtuple('KeyWords', 'comment tiles tile wire conn summary pip site pinwire prim_defs prim_def element cfg pin header tile_summary')  # noqa
@@ -703,6 +703,9 @@ def compare_tile(f1, f2):
     if f1.line[4] != f2.line[4]:
         eprint(f"EXTRA_WIRE_EXCEPTION line {f2.line_num}:"
                + f"{f1.line_num} summary wire count mismatch")
+    elif f1.line[5] != f2.line[5]:
+        eprint(f"EXTRA_PIP_EXCEPTION line {f2.line_num}:{f1.line_num} "
+               + f"summary pip count mismatch")
     else:
         assert_equal(f1.line, f2.line)
 
@@ -716,7 +719,9 @@ def compare_prim_defs(f1, f2):
     """
 
     # Check primitive_defs declaration
-    assert_equal(f1.line, f2.line)
+    if f1.line != f2.line:
+        eprint(f"PRIM_DEF_GENERAL_EXCEPTION line {f2.line_num}:{f1.line_num} "
+               + f"PRIMITIVE_DEFS count mismatch")
     get_line(f1, f2)
 
     # Primitive_def checks
