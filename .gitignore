@@ -12,3 +12,4 @@ env
 *.xdlrc
 XDLRC_Exceptions.txt
 out.txt
+WireArray.tcl
