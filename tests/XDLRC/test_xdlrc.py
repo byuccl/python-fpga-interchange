@@ -94,9 +94,12 @@ typeErr = {}
 _errors = 0
 unknowns = []
 
+XDLRC_Errors = "XDLRC_ERRORS.txt"
+XDLRC_Errors_f = None
 
-def err_print(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
+
+def err_print(str_in):
+    XDLRC_Errors_f.write(XDLRC_Errors_f.header + str_in + '/n')
 
 
 XDLRC_Exceptions = "XDLRC_Exceptions.txt"
@@ -541,6 +544,7 @@ class Element(namedtuple('Element', 'name pins conns')):
         if type(self) != type(other):
             return False
         if self.name != other.name:
+            err_print(f"Element name mismatch {self.name} != {other.name}")
             return False
 
         if len(self.pins) != len(other.pins):
@@ -619,10 +623,11 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
             else:
                 err_print(f"Prim_Def {self.name} Missing Element {key}")
 
+        XDLRC_Errors_f.header = f"Prim_Def {self.name} "
         for key in keys.intersection(other_keys):
             if self.elements[key] != other.elements[key]:
                 _errors += 1
-                err_print(f"Prim_Def {self.name} Element Mismatch\n"
+                err_print("Element Mismatch\n"
                           + f"\t{self.elements[key]}\n\t{other.elements[key]}")
 
         return tmp_err == _errors
@@ -828,8 +833,6 @@ if __name__ == "__main__":
     if args.e:
         XDLRC_Exceptions = args.e
 
-    XDLRC_Exceptions_f = open(XDLRC_Exceptions, "w")
-
     # TODO make this optional
     with open(VIVADO_NODELESS_WIRES, "r") as f:
         vivado_wires_nodeless = json.load(f)
@@ -840,9 +843,12 @@ if __name__ == "__main__":
     with (open(args.dir+args.TEST_XDLRC, "r") as f1,
           open(args.dir+args.CORRECT_XDLRC, "r") as f2,
           open(XDLRC_Exceptions, "w") as f3,
-          open(TCL_FILE_OUT, "w") as f4):
+          open(TCL_FILE_OUT, "w") as f4,
+          open(XDLRC_Errors, "w") as f5):
 
         XDLRC_Exceptions_f = f3
+        XDLRC_Errors_f = f5
+        XDLRC_Errors_f.header = ""
         eprint("Line numbers are expressed CORRECT_XDLRC:TEST_XDLRC")
         eprint("Some errors are not applicable to both files. These are "
                + "expressed with the appropriate side of the colon empty.")
