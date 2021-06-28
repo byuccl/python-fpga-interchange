@@ -11,5 +11,6 @@ env
 *.yaml
 *.xdlrc
 XDLRC_Exceptions.txt
+XDLRC_ERRORS.txt
 out.txt
 WireArray.tcl

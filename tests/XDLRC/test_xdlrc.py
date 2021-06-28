@@ -32,6 +32,26 @@ import json
 from fpga_interchange.XDLRC.XDLRC import XDLRC
 from fpga_interchange.interchange_capnp import Interchange, read_capnp_file
 
+############################## Convenient Constants ###########################
+TEST_XDLRC = 'xc7a100t.xdlrc'
+CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
+# TODO: make these paths not hard-coded
+SCHEMA_DIR = "/home/reilly/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
+DEVICE_FILE = "/home/reilly/xc7a100t.device"
+
+#  Filename of JSON dict:
+#    {tile_name:{
+#    "pips":pip_list,
+#    "wires":wire_list,
+#    "sites":site_list}
+#    }
+VIVADO_INFO = "/home/reilly/xc7a100tcsg324_info.json"
+# Filename of JSON with a list (not comprehensive) of nodeless wires in Vivado.
+VIVADO_NODELESS_WIRES = "/home/reilly/xc7a100tcsg324_nodeless_wires.json"
+# Namve of file containing output tcl array of possible nodeless wires.
+TCL_FILE_OUT = "WireArray.tcl"
+###############################################################################
+
 KeyWords = namedtuple('KeyWords', 'comment tiles tile wire conn summary pip site pinwire prim_defs prim_def element cfg pin header tile_summary')  # noqa
 
 # Dictionary contains XDLRC declarations as keys and expected token length
@@ -53,61 +73,96 @@ XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
                                cfg='CFG', pin='PIN',
                                header='XDL_RESOURCE_REPORT', summary='SUMMARY')
 
-TEST_XDLRC = 'xc7a100t.xdlrc'
-CORRECT_XDLRC = '/home/reilly/xc7a100t.xdlrc'
-# TODO: make these paths not hard-coded
-SCHEMA_DIR = "/home/reilly/RapidWright/interchange/fpga-interchange-schema/interchange"  # noqa
-DEVICE_FILE = "/home/reilly/xc7a100t.device"
-VIVADO_INFO = "/home/reilly/xc7a100tcsg324_info.json"
-VIVADO_NODELESS_WIRES = "/home/reilly/xc7a100tcsg324_nodeless_wires.json"
-TCL_FILE_OUT = "WireArray.tcl"
-TCL_F = None
+
+class Vivado():
+    """
+    Handles Vivado data and tcl file output.
+
+    Class Attributes: 
+    info            -   VIVADO_INFO loaded into memory. 
+    nodeless_wires  -   NODELESS_WIRES loaded into memory.
+    TCL_F           -   File handle for TCL_FILE_OUT.
+    """
+
+    info = {}
+    nodeless_wires = {}
+    TCL_F = None
+
+    def setup(self):
+        """Load the files only once"""
+        with open(VIVADO_NODELESS_WIRES, "r") as f:
+            Vivado.nodeless_wires = json.load(f)
+        with open(VIVADO_INFO, "r") as f:
+            Vivado.info = json.load(f)
+        Vivado.TCL_F = open(TCL_FILE_OUT, "w")
+        Vivado.TCL_F.write('array set testWires {')
+
+    def tcl_print(self, tcl):
+        Vivado.TCL_F.write(tcl)
+
+    def pip(self, tile, wire0, wire1):
+        """Check if pip exists in Vivado"""
+        return (f"{wire0} {wire1}" in Vivado.info[tile]["pips"])
+
+    def wire(self, tile, wire):
+        """Check if wire exists in Vivado"""
+        return (f"{tile}/{wire}" in Vivado.info[tile]["wires"])
+
+    def site(self, tile, site):
+        """Check if site exists in Vivado"""
+        return (f"{site}" in Vivado.info[tile]["sites"])
+
+    def cleanup(self):
+        Vivado.TCL_F.write("}\n")
+        Vivado.TCL_F.close()
 
 
-def tcl_print(tcl):
-    TCL_F.write(tcl)
+class ErrorHandle():
+    """
+    Handle error and exception prints.
 
+    Class Attributes:
+    errors              -   Current error count.
+    unknowns            -   Record of encountered unkown key words.
+    XDLRC_ERRORS        -   Name of file to store error messages.
+    error_f             -   File Handle for XDLRC_Errors.
+    XDLRC_EXCEPTIONS    -   Name of file to store exception messages.
+    exception_f         -   File Handle for XDLRC_EXCEPTIONS.
+    """
 
-vivado = {}
+    _header = ""
+    errors = 0
+    unknowns = []
+    XDLRC_Errors = "XDLRC_ERRORS.txt"
+    error_f = None
+    XDLRC_Exceptions = "XDLRC_Exceptions.txt"
+    exception_f = None
 
+    def __init__(self, header=""):
+        """Set message header"""
+        self._header = header
 
-def vivado_pip(tile, wire0, wire1):
-    """Check if pip exists in Vivado"""
-    return (f"{wire0} {wire1}" in vivado[tile]["pips"])
+    def setup(self):
+        ErrorHandle.error_f = open(ErrorHandle.XDLRC_Errors, "w")
+        ErrorHandle.exception_f = open(ErrorHandle.XDLRC_Exceptions, "w")
+        ErrorHandle.exception_f.write(
+            "Line numbers are expressed CORRECT_XDLRC:TEST_XDLRC\n"
+            + "Some errors are not applicable to both files. These are "
+            + "expressed with the appropriate side of the colon empty.\n"
+            + "See XDLRC.py for further explanation of file contents\n\n\n")
 
+    def err_print(self, str_in):
+        ErrorHandle.errors += 1
+        ErrorHandle.error_f.write(self._header + str_in + '/n')
 
-def vivado_wire(tile, wire):
-    """Check if wire exists in Vivado"""
-    return (f"{tile}/{wire}" in vivado[tile]['wires'])
+    def ex_print(self, exception, str_in):
+        ErrorHandle.exception_f.write(f"{exception} {self._header} {str_in}\n")
 
-
-def vivado_site(tile, site):
-    """Check if site exists in Vivado"""
-    return (f"{site}" in vivado[tile]["sites"])
-
-
-vivado_wires = {}
-vivado_pips = {}
-typeErr = {}
-
-# global _errors
-_errors = 0
-unknowns = []
-
-XDLRC_Errors = "XDLRC_ERRORS.txt"
-XDLRC_Errors_f = None
-
-
-def err_print(str_in):
-    XDLRC_Errors_f.write(XDLRC_Errors_f.header + str_in + '/n')
-
-
-XDLRC_Exceptions = "XDLRC_Exceptions.txt"
-XDLRC_Exceptions_f = None
-
-
-def eprint(str_in):
-    XDLRC_Exceptions_f.write(str_in + '\n')
+    def cleanup(self):
+        self.err_print(
+            f"Done comparing XDLRC files. Errors: {ErrorHandle.errors}")
+        ErrorHandle.error_f.close()
+        ErrorHandle.exception_f.close()
 
 
 def file_init(*argv):
@@ -138,7 +193,7 @@ def get_line(*argv):
     Parameters:
         Any number of (XDLRC) file objects.
     """
-
+    err = ErrorHandle()
     for f in argv:
         line = []
         while True:
@@ -146,8 +201,8 @@ def get_line(*argv):
             if not line:
                 # EOF is reached in this file. end of parse
                 print(f"file reached EOF\n\n")
-                if unknowns:
-                    print(unknowns)
+                if ErrorHandle.unknowns:
+                    print(ErrorHandle.unknowns)
                 break
 
             # keep track of line numbers
@@ -158,16 +213,18 @@ def get_line(*argv):
                 continue
             line = line.upper().split()
             key_word = line[0]
-            if key_word not in XDLRC_KEY_WORD_KEYS and key_word[0] != XDLRC_KEY_WORD_KEYS.comment:
-                if line[0] not in unknowns:
+            if (key_word not in XDLRC_KEY_WORD_KEYS
+                    and key_word[0] != XDLRC_KEY_WORD_KEYS.comment):
+                if line[0] not in ErrorHandle.unknowns:
                     print(f"Warning: Unknown Key word {line[0]}. Ignoring line"
                           + f" {f.line_num}")
                     print(line)
-                    unknowns.append(line[0])
+                    ErrorHandle.unknowns.append(line[0])
                 continue
 
             elif key_word == XDLRC_KEY_WORD_KEYS.cfg:  # ignore cfg lines
-                eprint(f"CFG_EXCEPTION triggered on line {f.line_num}")
+                err.ex_print("CFG_EXCEPTION",
+                             f"triggered on line {f.line_num}")
 
             elif (key_word[0] != XDLRC_KEY_WORD_KEYS.comment and
                   key_word != XDLRC_KEY_WORD_KEYS.header):
@@ -194,9 +251,9 @@ def assert_equal(obj1, obj2):
     try:
         assert obj1 == obj2
     except AssertionError as e:
-        global _errors
-        _errors += 1
-        err_print(f"AssertionError caught.\nObj1:\n{obj1}\nObj2:\n{obj2}\n\n")
+        err = ErrorHandle()
+        err.err_print(
+            f"AssertionError caught.\nObj1:\n{obj1}\nObj2:\n{obj2}\n\n")
         return False
     return True
 
@@ -267,18 +324,19 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
         and print out all errors found.  Increments global _error count.
         """
 
-        global _errors
-        tmp_err = _errors
+        tmp_err = ErrorHandle.errors
+        vivado = Vivado()
+        err = ErrorHandle(f"Tile: {self.name} Type: {self.type}")
 
         if type(other) != type(self):
             return False
 
         if self.name != other.name:
-            err_print("Fatal Error: Tile names do not match. Abort compare.")
-            err_print(f"Name1: {self.name} Name2: {other.name}\n\n")
+            err.err_print(
+                "Fatal Error: Tile names do not match. Abort compare.")
+            err.err_print(f"Name1: {self.name} Name2: {other.name}\n\n")
             return False
 
-        err_header = f"Tile: {self.name} Type: {self.type}"
         # compare wires
         keys = (set(self.wires.keys()), set(other.wires.keys()))
         common_wires = keys[0].intersection(keys[1])
@@ -287,30 +345,22 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
         for wire in uncommon_wires:
 
             if wire in keys[0]:
-                if vivado_wire(self.name, wire):
-                    eprint(
-                        f"EXTRA_WIRE_EXCEPTION 011 {err_header} Wire: {wire}")
+                if vivado.wire(self.name, wire):
+                    err.ex_print("EXTRA_WIRE_EXCEPTION 011", f"Wire: {wire}")
                 else:
                     # Wire is not in Vivado or ISE
-                    _errors += 1
-                    if self.type not in typeErr.keys():
-                        typeErr[self.type] = 1
-                    else:
-                        typeErr[self.type] += 1
-                    err_print(f"{err_header} Extra wire 010 {wire}")
+                    err.err_print(f"Extra wire 010 {wire}")
             else:
-                if vivado_wire(self.name, wire):
+                if vivado.wire(self.name, wire):
                     # Wire is in Vivado, ISE, and interchange but Vivado and
                     # interchange do not document any nodes, so the conns
                     # cannot be properly generated.
                     # TCL script was used to verify that all wires here fall
                     # under this category
-                    eprint(
-                        f"NODELESS_WIRE_EXCEPTION 101 {err_header} Wire {wire}")
+                    err.ex_print("NODELESS_WIRE_EXCEPTION 101", f"Wire {wire}")
                 else:
                     # Wire is only in ISE
-                    eprint(
-                        f"MISSING_WIRE_EXCEPTION 100 {err_header} Wire {wire}")
+                    err.ex_print("MISSING_WIRE_EXCEPTION 100", f"Wire {wire}")
 
         for wire in common_wires:
             conns = self.wires[wire]
@@ -320,30 +370,19 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
             uncommon = all_conns[0].symmetric_difference(all_conns[1])
 
             for conn in uncommon:
-                if vivado_wire(conn[0], conn[1]):
+                if vivado.wire(conn[0], conn[1]):
                     if conn in all_conns[0]:
-                        eprint(f"EXTRA_WIRE_EXCEPTION (Conn 011) {err_header} "
-                               + "Wire: {wire} Conn: {conn}")
+                        err.ex_print("EXTRA_WIRE_EXCEPTION (Conn 011)",
+                                     f"Wire: {wire} Conn: {conn}")
                     else:
-                        _errors += 1
-                        if self.type not in typeErr.keys():
-                            typeErr[self.type] = 1
-                        else:
-                            typeErr[self.type] += 1
-                            err_print(f"{err_header} Missing conn {conn} for "
+                        err.err_print(f"Missing conn {conn} for "
                                       + "wire {wire} 101")
                 else:
-                    _errors += 1
-                    if self.type not in typeErr.keys():
-                        typeErr[self.type] = 1
-                    else:
-                        typeErr[self.type] += 1
                     if conn in all_conns[0]:
-                        err_print(f"{err_header} Extra conn {conn} for wire "
-                                  + "{wire} 010")
+                        err.err_print(f"Extra conn {conn} for wire {wire} 010")
                     else:
-                        err_print(f"{err_header} Missing conn {conn} for wire "
-                                  + "{wire} 100")
+                        err.err_print(
+                            f"Missing conn {conn} for wire {wire} 100")
 
         # compare pips
         keys = [set(self.pips.keys()), set(other.pips.keys())]
@@ -352,35 +391,25 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
 
         for wire_in in uncommon_pips:
             if wire_in in keys[0]:
-                if vivado_pip(self.name, wire_in, self.pips[wire_in][0]):
-                    eprint(f"EXTRA_PIP_EXCEPTION 011 {err_header} "
-                           + f"Pip {wire_in} {self.pips[wire_in]}")
+                if vivado.pip(self.name, wire_in, self.pips[wire_in][0]):
+                    err.ex_print("EXTRA_PIP_EXCEPTION 011",
+                                 f"Pip {wire_in} {self.pips[wire_in]}")
                 else:
                     pip_conns = self.pips[wire_in]
                     if (len(pip_conns) == 1
-                        and vivado_wire(self.name, wire_in)
-                            and vivado_wire(self.name, pip_conns[0])):
-                        eprint(f"EXTRA_INTERCHANGE_PIP_EXCEPTION {err_header} "
-                               + f"Pip 001: {wire_in} {pip_conns} (wires 011)")
+                        and vivado.wire(self.name, wire_in)
+                            and vivado.wire(self.name, pip_conns[0])):
+                        err.ex_print("EXTRA_INTERCHANGE_PIP_EXCEPTION",
+                                     f"Pip 001: {wire_in} {pip_conns} (wires 011)")
                     else:
-                        _errors += 1
-                        if self.type not in typeErr.keys():
-                            typeErr[self.type] = 1
-                        else:
-                            typeErr[self.type] += 1
-                        err_print(f"{err_header} Extra Pip {wire_in} "
-                                  + f"{self.pips[wire_in]}")
+                        err.err_print(
+                            f"Extra Pip {wire_in} {self.pips[wire_in]}")
             else:
-                if vivado_pip(self.name, wire_in, other.pips[wire_in][0]):
-                    _errors += 1
-                    if self.type not in typeErr.keys():
-                        typeErr[self.type] = 1
-                    else:
-                        typeErr[self.type] += 1
-                    err_print(f"{err_header} Missing Pip {wire_in}")
+                if vivado.pip(self.name, wire_in, other.pips[wire_in][0]):
+                    err.err_print(f"Missing Pip {wire_in}")
                 else:
-                    eprint(
-                        f"MISSING_PIP_EXCEPTION 100 {err_header} Pip wire0: {wire_in}")
+                    err.ex_print("MISSING_PIP_EXCEPTION 100",
+                                 f"Pip wire0: {wire_in}")
 
         for wire_in in common_pips:
             wire_outs = self.pips[wire_in]
@@ -393,17 +422,12 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                 conns = [set(wire_outs), set(other_wire_outs)]
                 diffs = conns[0].symmetric_difference(other_wire_outs)
                 for conn in diffs:
-                    if conn in conns[0] and vivado_wire(self.name, conn):
-                        eprint(f"EXTRA_WIRE_EXCEPTION 011 {err_header}"
-                               + f"Pip: {wire_in} {conn}")
+                    if conn in conns[0] and vivado.wire(self.name, conn):
+                        err.ex_print("EXTRA_WIRE_EXCEPTION 011",
+                                     f"Pip: {wire_in} {conn}")
                     else:
-                        _errors += 1
-                        if self.type not in typeErr.keys():
-                            typeErr[self.type] = 1
-                        else:
-                            typeErr[self.type] += 1
-                        err_print(f"{err_header} Pip conn missing for pip"
-                                  + f"{wire_in} {conn}")
+                        err.err_print(f"Pip conn missing for pip"
+                                      + f"{wire_in} {conn}")
 
         # compare primitive sites
         common_sites = set()
@@ -413,25 +437,15 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
             uncommon_sites = keys[0].symmetric_difference(keys[1])
 
             for site in uncommon_sites:
-                _errors += 1
                 if site in keys[0]:
-
-                    if self.type not in typeErr.keys():
-                        typeErr[self.type] = 1
-                    else:
-                        typeErr[self.type] += 1
-                    err_print(f"{err_header} Extra Site {site}")
+                    err.err_print(f"Extra Site {site}")
                 else:
-                    if self.type not in typeErr.keys():
-                        typeErr[self.type] = 1
-                    else:
-                        typeErr[self.type] += 1
-                    err_print(f"{err_header} Missing Site {site}")
+                    err.err_print(f"Missing Site {site}")
         else:
             for site0, site1 in zip(self.sites.items(), other.sites.items()):
                 if site0[0] == site1[0]:
                     common_sites.add(site0[0])
-                elif vivado_site(self.name, site0[0]):
+                elif vivado.site(self.name, site0[0]):
                     other.sites[site0[0]] = site1[1]
                     common_sites.add(site0[0])
 
@@ -440,14 +454,9 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
             other_pinwires = set(other.sites[site])
 
             for pw in pinwires.symmetric_difference(other_pinwires):
-                _errors += 1
-                if self.type not in typeErr.keys():
-                    typeErr[self.type] = 1
-                else:
-                    typeErr[self.type] += 1
-                err_print(f"{err_header} PinWire mismatch for {pw}")
+                err.err_print(f"PinWire mismatch for {pw}")
 
-        return tmp_err == _errors
+        return tmp_err == ErrorHandle.errors
 
 
 def build_tile_db(f, tileName, typeStr):
@@ -461,7 +470,7 @@ def build_tile_db(f, tileName, typeStr):
     """
 
     tile = TileStruct(tileName, typeStr, {}, {}, OrderedDict())
-    err_header = f"Tile: {tileName} Type: {typeStr}"
+    err = ErrorHandle(f"Tile: {tileName} Type: {typeStr}")
     get_line(f)
 
     while f.line and f.line[0] != XDLRC_KEY_WORD_KEYS.tile_summary:
@@ -484,8 +493,7 @@ def build_tile_db(f, tileName, typeStr):
 
         elif f.line[0] == XDLRC_KEY_WORD_KEYS.site:
             if f.line[3].upper() == XDLRC_UNSUPPORTED_WORDS[0]:
-                eprint(
-                    f"PKG_SPECIFIC_EXCEPTION  {err_header} line {f.line_num}:")
+                err.ex_print("PKG_SPECIFIC_EXCEPTION", f"line {f.line_num}:")
                 f.line.remove(f.line[3])
 
             sites_key = f.line[1] + ' ' + f.line[2]
@@ -501,9 +509,10 @@ def build_tile_db(f, tileName, typeStr):
                     PinWire(f.line[1], direction, f.line[3]))
                 get_line(f)
         else:
-            err_print("Error: build_tile_db() hit default branch")
-            err_print("This should not happen if XDLRC files are equal")
-            err_print(f"Line {f.line_num}: {f.line}")
+            error_str = ("Error: build_tile_db() hit default branch\n"
+                         + "This should not happen if XDLRC files are equal\n"
+                         + f"Line {f.line_num}: {f.line}\n")
+            err.err_print(error_str)
             sys.exit()
 
     return tile
@@ -541,25 +550,32 @@ class Element(namedtuple('Element', 'name pins conns')):
     """
 
     def __eq__(self, other):
+        err = ErrorHandle(ErrorHandle._header)
+        tmp_err = ErrorHandle.errors
+
         if type(self) != type(other):
             return False
         if self.name != other.name:
-            err_print(f"Element name mismatch {self.name} != {other.name}")
+            err.err_print(f"Element name mismatch {self.name} != {other.name}")
             return False
 
-        if len(self.pins) != len(other.pins):
-            return False
-        if len(self.conns) != len(other.conns):
-            return False
+        pin_sets = (set(self.pins), set(other.pins))
+        assert len(self.pins) == len(pin_sets[0])
+        assert len(other.pins) == len(pin_sets[1])
+        conn_sets = (set(self.conns), set(other.conns))
+        assert len(self.conns) == len(conn_sets[0])
+        assert len(other.conns) == len(conn_sets[1])
 
-        for pin in self.pins:
-            if pin not in other.pins:
-                return False
-        for conn in self.conns:
-            if conn not in other.conns:
-                return False
+        for pin in pin_sets[0].symmetric_difference(pin_sets[1]):
+            if pin in pin_sets[0]:
+                err.err_print(f"Extra Element Pinwire {pin}")
+            else:
+                err.err_print(f"Missing Element Pinwire {pin}")
 
-        return True
+        for conn in conn_sets[0].symmetric_difference(conn_sets[1]):
+            err.err_print(f"Conn mismatch {conn}")
+
+        return tmp_err == ErrorHandle.errors
 
 
 class PrimDef(namedtuple('PrimDef', 'name pins elements')):
@@ -585,52 +601,48 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
         elements and print out all errors found.  Increments global
         _error count.
         """
+
         if type(self) != type(other):
             return False
 
+        err = ErrorHandle(f"Prim_Def {self.name}")
         if self.name != other.name:
-            err_print("Fatal Error: Primitive Def name mismatch")
-            err_print(f"Name1: {self.name} Name2: {other.name}")
+            err.err_print("Fatal Error: Primitive Def name mismatch\n"
+                          + f"Name1: {self.name} Name2: {other.name}")
             return False
 
-        global _errors
-        tmp_err = _errors
+        tmp_err = ErrorHandle.errors
 
         # Check pins
         pins = set(self.pins.keys())
         other_pins = set(other.pins.keys())
 
         for pin in pins.symmetric_difference(other_pins):
-            _errors += 1
             if pin not in pins:
-                err_print(f"Prim_Def: {self.name} Extra Pin {self.pins[pin]}")
+                err.err_print(f"Extra Pin {self.pins[pin]}")
             else:
-                err_print(
-                    f"Prim_Def: {self.name} Missing Pin {other.pins[pin]}")
+                err.err_print(f"Missing Pin {other.pins[pin]}")
 
         for pin in pins.intersection(other_pins):
             if self.pins[pin] != other.pins[pin]:
-                err_print(f"Prim_Def: {self.name} Pin Mismatch\n"
-                          + f"\t{self.pins[pin]}\n\t{other.pins[pin]}")
+                err.err_print(
+                    f"Pin Mismatch\n\t{self.pins[pin]}\n\t{other.pins[pin]}")
         # Check elements
         keys = set(self.elements.keys())
         other_keys = set(other.elements.keys())
 
         for key in keys.symmetric_difference(other_keys):
-            _errors += 1
             if key in self.elements.keys():
-                err_print(f"Prim_Def {self.name} Extra Element {key}")
+                err.err_print(f"Extra Element {key}")
             else:
-                err_print(f"Prim_Def {self.name} Missing Element {key}")
+                err.err_print(f"Missing Element {key}")
 
-        XDLRC_Errors_f.header = f"Prim_Def {self.name} "
         for key in keys.intersection(other_keys):
             if self.elements[key] != other.elements[key]:
-                _errors += 1
-                err_print("Element Mismatch\n"
-                          + f"\t{self.elements[key]}\n\t{other.elements[key]}")
+                err.err_print("Element Mismatch\n\t{self.elements[key]}\n"
+                              + f"\t{other.elements[key]}")
 
-        return tmp_err == _errors
+        return tmp_err == ErrorHandle.errors
 
 
 def build_prim_def_db(f, name):
@@ -644,6 +656,7 @@ def build_prim_def_db(f, name):
     """
     prim_def = PrimDef(name, {}, {})
     get_line(f)
+    err = ErrorHandle()
 
     while (f.line and (f.line[0] != XDLRC_KEY_WORD_KEYS.prim_def)
            and f.line[0] != XDLRC_KEY_WORD_KEYS.summary):
@@ -676,11 +689,12 @@ def build_prim_def_db(f, name):
                     else:
                         break
             else:
-                eprint(f"CFG_ELEMENT_EXCEPTION caught on line {f.line_num}")
+                err.ex_print("CFG_ELEMENT_EXCEPTION",
+                             f"caught on line {f.line_num}")
                 get_line(f)
         else:
-            err_print(f"Error: build_prim_def_db hit default branch")
-            err_print(f"Check syntax on line {f.line_num}")
+            err.err_print(f"Error: build_prim_def_db hit default branch\n"
+                          + f"Check syntax on line {f.line_num}")
             get_line(f)
 
     return prim_def
@@ -706,11 +720,11 @@ def compare_tile(f1, f2):
     # This first check accounts for EXTRA_WIRE_EXCEPTION making the summay
     # wire count be off
     if f1.line[4] != f2.line[4]:
-        eprint(f"EXTRA_WIRE_EXCEPTION line {f2.line_num}:"
-               + f"{f1.line_num} summary wire count mismatch")
+        (f"EXTRA_WIRE_EXCEPTION line {f2.line_num}:"
+         + f"{f1.line_num} summary wire count mismatch")
     elif f1.line[5] != f2.line[5]:
-        eprint(f"EXTRA_PIP_EXCEPTION line {f2.line_num}:{f1.line_num} "
-               + f"summary pip count mismatch")
+        (f"EXTRA_PIP_EXCEPTION line {f2.line_num}:{f1.line_num} "
+         + f"summary pip count mismatch")
     else:
         assert_equal(f1.line, f2.line)
 
@@ -723,18 +737,19 @@ def compare_prim_defs(f1, f2):
     Assumes file_init() has been executed for each file parameter.
     """
 
+    err = ErrorHandle()
+
     # Check primitive_defs declaration
     if f1.line != f2.line:
-        eprint(f"PRIM_DEF_GENERAL_EXCEPTION line {f2.line_num}:{f1.line_num} "
-               + f"PRIMITIVE_DEFS count mismatch")
+        err.ex_print("PRIM_DEF_GENERAL_EXCEPTION",
+                     f"line {f2.line_num}:{f1.line_num} PRIMITIVE_DEFS count mismatch")
     get_line(f1, f2)
 
     # Primitive_def checks
     while f1.line and f2.line and f1.line[0] != XDLRC_KEY_WORD_KEYS.summary:
-
         while f2.line[1] != f1.line[1]:  # Not all ISE prim defs represented
-            eprint(f"PRIM_DEF_GENERAL_EXCEPTION caught on line {f2.line_num}."
-                   + f"PRIMITIVE_DEF {f2.line[1]} missing.")
+            err.ex_print("PRIM_DEF_GENERAL_EXCEPTION",
+                         f"caught on line {f2.line_num}. PRIMITIVE_DEF {f2.line[1]} missing.")
             get_line(f2)
             while f2.line[0] != XDLRC_KEY_WORD_KEYS.prim_def:
                 get_line(f2)
@@ -742,7 +757,8 @@ def compare_prim_defs(f1, f2):
         # Elements w/ only CFG bits are not supported, so comparing
         # element count will likely fail. So element cnt is dropped.
         if f2.line[3] != f1.line[3]:
-            eprint(f"CFG_PRIM_DEF_EXCEPTION caught on line {f2.line_num}")
+            err.ex_print("CFG_PRIM_DEF_EXCEPTION",
+                         f"caught on line {f2.line_num}")
         f2.line = f2.line[:3]
         f1.line = f1.line[:3]
 
@@ -807,8 +823,8 @@ def argparse_setup():
                         nargs='?', default=CORRECT_XDLRC)
     parser.add_argument("dir", help="Directory where files are located",
                         nargs='?', default='')
-    parser.add_argument("-e", help="Name of known exception file",
-                        default=XDLRC_Exceptions)
+    parser.add_argument("--ex", help="Name of known exception file")
+    parser.add_argument("-e", help="Name of error output file")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-t", "--tile", help="Parse files as single tile",
                        action="store_true")
@@ -830,34 +846,19 @@ if __name__ == "__main__":
         finish = time.time() - start
         print(f"XDLRC {args.dir+args.TEST_XDLRC} generated in {finish} sec ")
 
+    if args.ex:
+        ErrorHandle.XDLRC_Exceptions = args.ex
     if args.e:
-        XDLRC_Exceptions = args.e
+        ErrorHandle.XDLRC_Errors = args.e
 
-    # TODO make this optional
-    with open(VIVADO_NODELESS_WIRES, "r") as f:
-        vivado_wires_nodeless = json.load(f)
-
-    with open(VIVADO_INFO, "r") as f:
-        vivado = json.load(f)
-
+    err = ErrorHandle()
+    err.setup()
     with (open(args.dir+args.TEST_XDLRC, "r") as f1,
-          open(args.dir+args.CORRECT_XDLRC, "r") as f2,
-          open(XDLRC_Exceptions, "w") as f3,
-          open(TCL_FILE_OUT, "w") as f4,
-          open(XDLRC_Errors, "w") as f5):
-
-        XDLRC_Exceptions_f = f3
-        XDLRC_Errors_f = f5
-        XDLRC_Errors_f.header = ""
-        eprint("Line numbers are expressed CORRECT_XDLRC:TEST_XDLRC")
-        eprint("Some errors are not applicable to both files. These are "
-               + "expressed with the appropriate side of the colon empty.")
-        eprint("See XDLRC.py for further explanation of file contents\n\n\n")
-
-        TCL_F = f4
-        tcl_print('array set testWires {')
+          open(args.dir+args.CORRECT_XDLRC, "r") as f2):
 
         file_init(f1, f2)
+        vivado = Vivado()
+        vivado.setup()
 
         start = time.time()
 
@@ -870,9 +871,7 @@ if __name__ == "__main__":
 
         finish = time.time() - start
         print(f"XDLRC compared in {finish} seconds")
+        vivado.cleanup()
 
-        tcl_print("}\n")
-
-    err_print(f"Done comparing XDLRC files. Errors: {_errors}")
-    print(f"Done comparing XDLRC files. Errors: {_errors}")
-    print(typeErr)
+    err.cleanup()
+    print(f"Done comparing XDLRC files. Errors: {ErrorHandle.errors}")
