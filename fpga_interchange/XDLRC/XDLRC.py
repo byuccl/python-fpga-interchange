@@ -251,7 +251,7 @@ class XDLRC(DeviceResources):
         xdlrc.write(f"\t\t(tile_summary {tile_name} {tile_type.name} ")
         xdlrc.write(f"{num_pinwires} {num_wires} {num_pips})\n")
         xdlrc.write(f"\t)\n")
-        return (num_sites, num_pips)
+        return (num_sites, num_pips, num_pinwires)
 
     def generate_tile(self, tile_name):
         """
@@ -265,8 +265,7 @@ class XDLRC(DeviceResources):
                 return self._generate_tile(tile)
 
     def generate_prim_defs(self):
-        """Generate the primitive_defs.  Returns number of pins"""
-        num_pins = 0
+        """Generate the primitive_defs."""
         # some pointers for abbreviated reference
         raw_repr = self.device_resource_capnp
         xdlrc = self.xdlrc
@@ -293,7 +292,6 @@ class XDLRC(DeviceResources):
             xdlrc.write(f"\t(primitive_def {site_t.site_type} "
                         + f"{len(site_t.site_pins)} {len(site_t.bels)}\n")
             # PIN declaration
-            num_pins += len(site_t.site_pins.keys())
             for pin_name, pin in site_t.site_pins.items():
                 direction = pin[3].name.lower()
                 xdlrc.write(
@@ -302,7 +300,6 @@ class XDLRC(DeviceResources):
             # ELEMENT declaration
             for bel in site_t.bels:
                 xdlrc.write(f"\t\t(element {bel.name} {len(bel.bel_pins)}\n")
-                num_pins += len(bel.bel_pins)
 
                 # 1 is the enum for routing
                 add_cfg = [] if (bel.category == 1) else None
@@ -336,15 +333,9 @@ class XDLRC(DeviceResources):
                     for pin_idx in site_wires[site_wire_index].pins:
                         bel_pin2_r = site_t_r.belPins[pin_idx]
                         bel2_name = self.strs[bel_pin2_r.bel]
-                        if bel2_name != bel.name:
+                        if (bel2_name != bel.name and
+                                convert_direction(bel_pin2_r.dir).name.lower() != direction):
                             bel_pin2_name = self.strs[bel_pin2_r.name]
-
-                            # direction = convert_direction(bel_pin2_r.dir)
-                            # direction_str = ''
-                            # if direction == Direction.Input:
-                            #     direction_str = '==>'
-                            # elif direction == Direction.Output:
-                            #     direction_str = '<=='
 
                             xdlrc.write(f"\t\t\t(conn {bel.name} "
                                         + f"{bel_pin_name} "
@@ -356,7 +347,6 @@ class XDLRC(DeviceResources):
                 xdlrc.write(f"\t\t)\n")
             xdlrc.write(f"\t)\n")
         xdlrc.write(f")\n")
-        return num_pins  # This number is way off
 
     def generate_XDLRC(self):
         """
@@ -376,15 +366,17 @@ class XDLRC(DeviceResources):
         # TILE declarations
         num_sites = 0
         num_pips = 0
+        num_pins = 0
         for tile in self.tiles:
-            tmp_sites, tmp_pips = self._generate_tile(tile)
+            tmp_sites, tmp_pips, tmp_pins = self._generate_tile(tile)
             num_sites += tmp_sites
             num_pips += tmp_pips
+            num_pins += tmp_pins
 
         self.xdlrc.write(")\n")
 
         # PRIMITIVE_DEFS
-        num_pins = self.generate_prim_defs()
+        self.generate_prim_defs()
 
         # SUMMARY
         self.xdlrc.write(f"(summary tiles={len(self.tiles)} sites={num_sites} "
