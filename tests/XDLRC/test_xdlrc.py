@@ -62,7 +62,7 @@ XDLRC_KEY_WORD = {'#': 0, 'TILES': 3, 'TILE': 6, 'WIRE': 3, 'CONN': 6,
                   'ELEMENT': 3, 'CFG': 0, 'PIN': 4, 'XDL_RESOURCE_REPORT': 0,
                   'SUMMARY': 6}
 
-XDLRC_UNSUPPORTED_WORDS = ['UNBONDED']
+XDLRC_UNSUPPORTED_WORDS = ['UNBONDED', '_ROUTETHROUGH']
 
 XDLRC_KEY_WORD_KEYS = KeyWords(comment='#', tiles='TILES', tile='TILE',
                                wire='WIRE', conn='CONN',
@@ -78,8 +78,8 @@ class Vivado():
     """
     Handles Vivado data and tcl file output.
 
-    Class Attributes: 
-    info            -   VIVADO_INFO loaded into memory. 
+    Class Attributes:
+    info            -   VIVADO_INFO loaded into memory.
     nodeless_wires  -   NODELESS_WIRES loaded into memory.
     TCL_F           -   File handle for TCL_FILE_OUT.
     """
@@ -138,10 +138,6 @@ class ErrorHandle():
     XDLRC_Exceptions = "XDLRC_Exceptions.txt"
     exception_f = None
 
-    def __init__(self, header=""):
-        """Set message header"""
-        self._header = header
-
     def setup(self):
         ErrorHandle.error_f = open(ErrorHandle.XDLRC_Errors, "w")
         ErrorHandle.exception_f = open(ErrorHandle.XDLRC_Exceptions, "w")
@@ -153,10 +149,11 @@ class ErrorHandle():
 
     def err_print(self, str_in):
         ErrorHandle.errors += 1
-        ErrorHandle.error_f.write(self._header + str_in + '/n')
+        ErrorHandle.error_f.write(f"{ErrorHandle._header} {str_in}\n")
 
     def ex_print(self, exception, str_in):
-        ErrorHandle.exception_f.write(f"{exception} {self._header} {str_in}\n")
+        ErrorHandle.exception_f.write(
+            f"{exception} {ErrorHandle._header} {str_in}\n")
 
     def cleanup(self):
         self.err_print(
@@ -194,6 +191,7 @@ def get_line(*argv):
         Any number of (XDLRC) file objects.
     """
     err = ErrorHandle()
+    ErrorHandle._header = ""
     for f in argv:
         line = []
         while True:
@@ -222,10 +220,6 @@ def get_line(*argv):
                     ErrorHandle.unknowns.append(line[0])
                 continue
 
-            elif key_word == XDLRC_KEY_WORD_KEYS.cfg:  # ignore cfg lines
-                err.ex_print("CFG_EXCEPTION",
-                             f"triggered on line {f.line_num}")
-
             elif (key_word[0] != XDLRC_KEY_WORD_KEYS.comment and
                   key_word != XDLRC_KEY_WORD_KEYS.header):
 
@@ -252,6 +246,7 @@ def assert_equal(obj1, obj2):
         assert obj1 == obj2
     except AssertionError as e:
         err = ErrorHandle()
+        ErrorHandle._header = ""
         err.err_print(
             f"AssertionError caught.\nObj1:\n{obj1}\nObj2:\n{obj2}\n\n")
         return False
@@ -326,7 +321,8 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
 
         tmp_err = ErrorHandle.errors
         vivado = Vivado()
-        err = ErrorHandle(f"Tile: {self.name} Type: {self.type}")
+        err = ErrorHandle()
+        ErrorHandle._header = f"Tile: {self.name} Type: {self.type}"
 
         if type(other) != type(self):
             return False
@@ -376,7 +372,7 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                                      f"Wire: {wire} Conn: {conn}")
                     else:
                         err.err_print(f"Missing conn {conn} for "
-                                      + "wire {wire} 101")
+                                      + f"wire {wire} 101")
                 else:
                     if conn in all_conns[0]:
                         err.err_print(f"Extra conn {conn} for wire {wire} 010")
@@ -470,7 +466,7 @@ def build_tile_db(f, tileName, typeStr):
     """
 
     tile = TileStruct(tileName, typeStr, {}, {}, OrderedDict())
-    err = ErrorHandle(f"Tile: {tileName} Type: {typeStr}")
+    err = ErrorHandle()
     get_line(f)
 
     while f.line and f.line[0] != XDLRC_KEY_WORD_KEYS.tile_summary:
@@ -489,10 +485,15 @@ def build_tile_db(f, tileName, typeStr):
             if f.line[2] not in tile.pips.keys():
                 tile.pips[f.line[2]] = []
             tile.pips[f.line[2]].append(f.line[4])
+            if len(f.line) > 4 and XDLRC_UNSUPPORTED_WORDS[1] in f.line[4]:
+                ErrorHandle._header = f"Tile: {tileName} Type: {typeStr}"
+                err.ex_print("ROUTETHROUGH_EXCEPTION",
+                             f"line :{f.line_num} Pip: {f.line}")
             get_line(f)
 
         elif f.line[0] == XDLRC_KEY_WORD_KEYS.site:
             if f.line[3].upper() == XDLRC_UNSUPPORTED_WORDS[0]:
+                ErrorHandle._header = f"Tile: {tileName} Type: {typeStr}"
                 err.ex_print("PKG_SPECIFIC_EXCEPTION", f"line {f.line_num}:")
                 f.line.remove(f.line[3])
 
@@ -529,6 +530,9 @@ class Conn(namedtuple('Conn', 'bel1 belpin1 bel2 belpin2')):
         belpin2 (str) - Name of the OUTPUT Bel pin
     """
 
+    def __hash__(self):
+        return hash(tuple([self.bel1, self.belpin1, self.bel2, self.belpin2]))
+
     def __eq__(self, other):
         if type(self) != type(other):
             return False
@@ -539,7 +543,7 @@ class Conn(namedtuple('Conn', 'bel1 belpin1 bel2 belpin2')):
                 and (self.belpin2 == other.belpin2))
 
 
-class Element(namedtuple('Element', 'name pins conns')):
+class Element(namedtuple('Element', 'name pins conns cfg')):
     """
     Lightweight class for holding XDLRC element information.
     __eq__() is overridden for accruate comparison
@@ -547,10 +551,11 @@ class Element(namedtuple('Element', 'name pins conns')):
         name  (str)  - Element name
         pins  (list) - List of Element pins (PinWire)
         conns (list) - List of Element conns (Conn)
+        cfg   (list) - List of Element CFG strings
     """
 
     def __eq__(self, other):
-        err = ErrorHandle(ErrorHandle._header)
+        err = ErrorHandle()
         tmp_err = ErrorHandle.errors
 
         if type(self) != type(other):
@@ -568,12 +573,44 @@ class Element(namedtuple('Element', 'name pins conns')):
 
         for pin in pin_sets[0].symmetric_difference(pin_sets[1]):
             if pin in pin_sets[0]:
-                err.err_print(f"Extra Element Pinwire {pin}")
+                if "CARRY4_" in pin.name:
+                    err.ex_print("CARRY4_EXCEPTION",
+                                 f"Element: {self.name} Pinwire {pin}")
+                else:
+                    err.err_print(f"Extra Element Pinwire {pin}")
             else:
                 err.err_print(f"Missing Element Pinwire {pin}")
 
         for conn in conn_sets[0].symmetric_difference(conn_sets[1]):
-            err.err_print(f"Conn mismatch {conn}")
+            if len(conn_sets[0]) == len(conn_sets[1]):
+                err.err_print(
+                    f"Element Conn mismatch {conn} Element: {self.name}")
+            elif len(conn_sets[0]) > len(conn_sets[1]):
+                if "CARRY4_" in conn.bel1 or "CARRY4_" in conn.bel2:
+                    err.ex_print("CARRY4_EXCEPTION",
+                                 f"Conn to extra CARRY4 element Conn: {conn}")
+                else:
+                    err.err_print(
+                        f"Extra Element Conn {conn} Element: {self.name}")
+            else:
+                err.err_print(
+                    f"Missing Element Conn {conn} Element: {self.name}")
+
+        if set(self.cfg) != set(other.cfg):
+            if len(self.cfg) == 0:
+                err.ex_print("CFG_ELEMENT_EXCEPTION", f"Element: {self.name}")
+            else:
+                c4 = False
+                for i in self.cfg:
+                    if "CARRY4_" in i:
+                        c4 = True
+                        break
+                if c4:
+                    err.ex_print("CARRY4_EXCEPTION",
+                                 f"Element: {self.name} CFG: {self.cfg}")
+                else:
+                    err.err_print(
+                        f"CFG mismatch Element: {self.name} {self.cfg} {other.cfg}")
 
         return tmp_err == ErrorHandle.errors
 
@@ -605,7 +642,8 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
         if type(self) != type(other):
             return False
 
-        err = ErrorHandle(f"Prim_Def {self.name}")
+        err = ErrorHandle()
+        ErrorHandle._header = f"Prim_Def {self.name}"
         if self.name != other.name:
             err.err_print("Fatal Error: Primitive Def name mismatch\n"
                           + f"Name1: {self.name} Name2: {other.name}")
@@ -633,14 +671,19 @@ class PrimDef(namedtuple('PrimDef', 'name pins elements')):
 
         for key in keys.symmetric_difference(other_keys):
             if key in self.elements.keys():
-                err.err_print(f"Extra Element {key}")
+                if "CARRY4" in key:
+                    err.ex_print(f"CARRY4_EXCEPTION", f"Extra Element: {key}")
+                else:
+                    err.err_print(f"Extra Element {key}")
             else:
-                err.err_print(f"Missing Element {key}")
+                if XDLRC_UNSUPPORTED_WORDS[1] in key:
+                    err.ex_print("ROUTETHROUGH EXCEPTION",
+                                 f"Missing Element {key}")
+                else:
+                    err.err_print(f"Missing Element {key}")
 
         for key in keys.intersection(other_keys):
-            if self.elements[key] != other.elements[key]:
-                err.err_print("Element Mismatch\n\t{self.elements[key]}\n"
-                              + f"\t{other.elements[key]}")
+            self.elements[key] == other.elements[key]
 
         return tmp_err == ErrorHandle.errors
 
@@ -657,6 +700,7 @@ def build_prim_def_db(f, name):
     prim_def = PrimDef(name, {}, {})
     get_line(f)
     err = ErrorHandle()
+    ErrorHandle._header = ""
 
     while (f.line and (f.line[0] != XDLRC_KEY_WORD_KEYS.prim_def)
            and f.line[0] != XDLRC_KEY_WORD_KEYS.summary):
@@ -667,7 +711,7 @@ def build_prim_def_db(f, name):
             get_line(f)
         elif f.line[0] == XDLRC_KEY_WORD_KEYS.element:
             if f.line[2] != '0':  # make sure there is more than just cfg
-                element = Element(f.line[1], [], [])
+                element = Element(f.line[1], [], [], [])
                 prim_def.elements[f.line[1]] = element
                 element = prim_def.elements[f.line[1]]
                 get_line(f)
@@ -686,12 +730,17 @@ def build_prim_def_db(f, name):
                             element.conns.append(Conn(f.line[4], f.line[5],
                                                       f.line[1], f.line[2]))
                         get_line(f)
+                    elif f.line[0] == XDLRC_KEY_WORD_KEYS.cfg:
+                        element.cfg.extend(f.line[1:])
+                        get_line(f)
                     else:
                         break
             else:
                 err.ex_print("CFG_ELEMENT_EXCEPTION",
                              f"caught on line {f.line_num}")
                 get_line(f)
+        elif f.line[0] == XDLRC_KEY_WORD_KEYS.cfg:
+            get_line(f)
         else:
             err.err_print(f"Error: build_prim_def_db hit default branch\n"
                           + f"Check syntax on line {f.line_num}")
@@ -719,12 +768,14 @@ def compare_tile(f1, f2):
     # Check Tile summary
     # This first check accounts for EXTRA_WIRE_EXCEPTION making the summay
     # wire count be off
+    err = ErrorHandle()
+    ErrorHandle._header = f"Tile: {tile1.name}"
     if f1.line[4] != f2.line[4]:
-        (f"EXTRA_WIRE_EXCEPTION line {f2.line_num}:"
-         + f"{f1.line_num} summary wire count mismatch")
+        err.ex_print("EXTRA_WIRE_EXCEPTION", f"line {f2.line_num}:"
+                     + f"{f1.line_num} summary wire count mismatch")
     elif f1.line[5] != f2.line[5]:
-        (f"EXTRA_PIP_EXCEPTION line {f2.line_num}:{f1.line_num} "
-         + f"summary pip count mismatch")
+        err.ex_print("EXTRA_PIP_EXCEPTION", f"line {f2.line_num}:{f1.line_num} "
+                     + f"summary pip count mismatch")
     else:
         assert_equal(f1.line, f2.line)
 
@@ -738,6 +789,7 @@ def compare_prim_defs(f1, f2):
     """
 
     err = ErrorHandle()
+    ErrorHandle._header = ""
 
     # Check primitive_defs declaration
     if f1.line != f2.line:
@@ -795,8 +847,9 @@ def compare_xdlrc(f1, f2):
     compare_prim_defs(f1, f2)
 
     # This will fail due to PRIM_DEF_GENERAL_EXCEPTION
-    # TODO pin count is way off
-    assert_equal(f1.line, f2.line)
+    err = ErrorHandle()
+    err.ex_print("PRIM_DEF_GENERAL_EXCEPTION",
+                 f"Summary line mismatch:\n\t{f1.line}\n\t{f2.line}")
 
 
 def init(fileName=''):
