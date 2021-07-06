@@ -311,12 +311,12 @@ class XDLRC(DeviceResources):
                     bel_pin_name = bel_pin_index[1]
                     bel_info = site_t.bel_pins[bel_pin_index]
                     direction = bel_info[2].name.lower()
-                    if direction == 'inout':
-                        direction = 'input'
-                    xdlrc.write(f"\t\t\t(pin {bel_pin_name} {direction})\n")
-
-                    if (add_cfg is not None) and (direction == 'input'):
-                        add_cfg.append(bel_pin_name)
+                    if direction == 'inout' or direction == 'input':
+                        xdlrc.write(f"\t\t\t(pin {bel_pin_name} input)\n")
+                        if add_cfg is not None:
+                            add_cfg.append(bel_pin_name)
+                    else:
+                        xdlrc.write(f"\t\t\t(pin {bel_pin_name} output)\n")
 
                     # CONN declaration
                     site_wire_index = bel_info[1]
@@ -327,20 +327,43 @@ class XDLRC(DeviceResources):
 
                     if direction == 'input':
                         direction_str = '<=='
+                    elif direction == 'inout':
+                        direction = ''
                     else:
                         direction_str = '==>'
 
                     for pin_idx in site_wires[site_wire_index].pins:
                         bel_pin2_r = site_t_r.belPins[pin_idx]
                         bel2_name = self.strs[bel_pin2_r.bel]
-                        if (bel2_name != bel.name and
-                                convert_direction(bel_pin2_r.dir).name.lower() != direction):
+                        if bel2_name != bel.name:
                             bel_pin2_name = self.strs[bel_pin2_r.name]
-
-                            xdlrc.write(f"\t\t\t(conn {bel.name} "
-                                        + f"{bel_pin_name} "
-                                        + f"{direction_str} {bel2_name}"
-                                        + f" {bel_pin2_name})\n")
+                            direction2 = convert_direction(
+                                bel_pin2_r.dir).name.lower()
+                            if not direction:
+                                if direction2 == 'input':
+                                    xdlrc.write(f"\t\t\t(conn {bel.name} "
+                                                + f"{bel_pin_name} ==> "
+                                                + f"{bel2_name} "
+                                                + f"{bel_pin2_name})\n")
+                                elif direction2 == 'inout':
+                                    xdlrc.write(f"\t\t\t(conn {bel.name} "
+                                                + f"{bel_pin_name} <== "
+                                                + f"{bel2_name} "
+                                                + f"{bel_pin2_name})\n")
+                                    xdlrc.write(f"\t\t\t(conn {bel.name} "
+                                                + f"{bel_pin_name} ==> "
+                                                + f"{bel2_name} "
+                                                + f"{bel_pin2_name})\n")
+                                else:
+                                    xdlrc.write(f"\t\t\t(conn {bel.name} "
+                                                + f"{bel_pin_name} <== "
+                                                + f"{bel2_name} "
+                                                + f"{bel_pin2_name})\n")
+                            elif direction2 != direction:
+                                xdlrc.write(f"\t\t\t(conn {bel.name} "
+                                            + f"{bel_pin_name} "
+                                            + f"{direction_str} {bel2_name}"
+                                            + f" {bel_pin2_name})\n")
                 if add_cfg is not None:
                     xdlrc.write(
                         f"\t\t\t(cfg {' '.join(e for e in add_cfg)})\n")
