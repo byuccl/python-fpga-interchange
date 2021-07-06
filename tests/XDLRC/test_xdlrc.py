@@ -165,8 +165,8 @@ class ErrorHandle():
             f"{exception} {ErrorHandle._header} {str_in}\n")
 
     def cleanup(self):
-        self.err_print(
-            f"Done comparing XDLRC files. Errors: {ErrorHandle.errors}")
+        ErrorHandle.error_f.write(
+            f"Done comparing XDLRC files. Errors: {ErrorHandle.errors}\n")
         ErrorHandle.error_f.close()
         ErrorHandle.exception_f.close()
 
@@ -416,10 +416,9 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                             f"Extra Pip {wire_in} {self.pips[wire_in]}")
             else:
                 if vivado.pip(self.name, wire_in, other.pips[wire_in][0]):
-                    err.err_print(f"Missing Pip {wire_in}")
+                    err.err_print(f"Missing Pip 110 {wire_in}")
                 else:
-                    err.ex_print("MISSING_PIP_EXCEPTION 100",
-                                 f"Pip wire0: {wire_in}")
+                    err.err_print(f"Missing Pip 100 {wire_in}")
 
         for wire_in in common_pips:
             wire_outs = self.pips[wire_in]
@@ -590,6 +589,9 @@ class Element(namedtuple('Element', 'name pins conns cfg')):
                 if "CARRY4_" in pin.name:
                     err.ex_print("CARRY4_EXCEPTION",
                                  f"Element: {self.name} Pinwire {pin}")
+                elif self.name == "CIN" or self.name == "PRECYINIT":
+                    err.ex_print("CIN_PRECYINIT_EXCEPTION",
+                                 f"Extra Pinwire {pin} Element: {self.name}")
                 else:
                     err.err_print(f"Extra Element Pinwire {pin}")
             else:
@@ -603,6 +605,9 @@ class Element(namedtuple('Element', 'name pins conns cfg')):
                 if "CARRY4_" in conn.bel1 or "CARRY4_" in conn.bel2:
                     err.ex_print("CARRY4_EXCEPTION",
                                  f"Conn to extra CARRY4 element Conn: {conn}")
+                elif self.name == "CIN" or self.name == "PRECYINIT":
+                    err.ex_print("CIN_PRECYINIT_EXCEPTION",
+                                 f"Conn {conn} Element: {self.name}")
                 else:
                     err.err_print(
                         f"Extra Element Conn {conn} Element: {self.name}")
@@ -613,6 +618,9 @@ class Element(namedtuple('Element', 'name pins conns cfg')):
         if set(self.cfg) != set(other.cfg):
             if len(self.cfg) == 0:
                 err.ex_print("CFG_ELEMENT_EXCEPTION", f"Element: {self.name}")
+            elif self.name == "CIN" or self.name == "PRECYINIT":
+                err.ex_print("CIN_PRECYINIT_EXCEPTION",
+                             f"Element: {self.name} CFG: {self.cfg}")
             else:
                 c4 = False
                 for i in self.cfg:
