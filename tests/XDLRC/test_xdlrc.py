@@ -88,6 +88,10 @@ class Vivado():
     nodeless_wires = {}
     TCL_F = None
 
+    def tcl_print(self, tcl):
+        """This is assigned in setup()"""
+        pass
+
     def setup(self):
         """Load the files only once"""
         with open(VIVADO_NODELESS_WIRES, "r") as f:
@@ -96,9 +100,14 @@ class Vivado():
             Vivado.info = json.load(f)
         Vivado.TCL_F = open(TCL_FILE_OUT, "w")
         Vivado.TCL_F.write('array set testWires {')
+        Vivado.tcl_print = Vivado._tcl_print_first
 
-    def tcl_print(self, tcl):
+    def _tcl_print_first(self, tcl):
         Vivado.TCL_F.write(tcl)
+        Vivado.tcl_print = Vivado._tcl_print_next
+
+    def _tcl_print_next(self, tcl):
+        Vivado.TCL_F.write(f",{tcl}")
 
     def pip(self, tile, wire0, wire1):
         """Check if pip exists in Vivado"""
@@ -354,6 +363,7 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                     # TCL script was used to verify that all wires here fall
                     # under this category
                     err.ex_print("NODELESS_WIRE_EXCEPTION 101", f"Wire {wire}")
+                    vivado.tcl_print(f"{self.name}/{wire}")
                 else:
                     # Wire is only in ISE
                     err.ex_print("MISSING_WIRE_EXCEPTION 100", f"Wire {wire}")
@@ -370,6 +380,10 @@ class TileStruct(namedtuple('TileStruct', 'name type wires pips sites')):
                     if conn in all_conns[0]:
                         err.ex_print("EXTRA_WIRE_EXCEPTION (Conn 011)",
                                      f"Wire: {wire} Conn: {conn}")
+                    elif vivado.wire(conn[0], conn[1]):
+                        err.ex_print(
+                            "NODELESS_WIRE_EXCEPTION 101", f"Wire {conn}")
+                        vivado.tcl_print(f"{conn[0]}/{conn[1]}")
                     else:
                         err.err_print(f"Missing conn {conn} for "
                                       + f"wire {wire} 101")
